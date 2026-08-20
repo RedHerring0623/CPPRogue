@@ -1,0 +1,57 @@
+# ===== Unity 生成的目录（缓存/临时/日志，重新打开会重建）=====
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]serSettings/
+/[Rr]ecordings/
+/MemoryCaptures/
+
+# ===== IDE / 编辑器生成的解决方案与工程文件（由 .cs 自动重新生成）=====
+*.csproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vs/
+.idea/
+.vscode/
+.vsconfig
+
+# ===== 团结引擎 AI 助手的本地文件 =====
+.codely-cli/
+.codelyignore
+.com-unity-codely.json
+
+# ===== 崩溃报告 / 系统信息 =====
+sysinfo.txt
+crashlytics-build.properties
+
+# ===== 构建产物 =====
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.symbol.zip
+
+# ===== Addressables 打包产物（预留）=====
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# ===== 操作系统垃圾文件 =====
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
