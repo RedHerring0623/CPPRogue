@@ -1,0 +1,10 @@
+# IDE / 编辑器垃圾文件（Unity 项目内部的规则见 CPPRogue/.gitignore）
+.vs/
+.idea/
+.vscode/
+*.user
+
+# 万一在仓库根跑 dotnet 工具留下的产物
+bin/
+obj/
+TestResults/

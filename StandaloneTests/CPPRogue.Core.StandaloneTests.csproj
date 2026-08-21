@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    开发期快速验证工程：不复制源码，直接"链接"Unity 项目里的同一份文件（单一事实来源）。
+    在没有 Unity 编辑器的机器上 `dotnet test` 就能跑全部单元测试。
+    Unity 侧仍然是正式的编译/测试入口（Test Runner），两边的测试脚本是同一份。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>CPPRogue.Core.StandaloneTests</AssemblyName>
+    <RootNamespace>CPPRogue.Core.StandaloneTests</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 逻辑层 + 测试脚本，全部来自 Unity 项目目录。
+         Physics 下的两个文件用了 UnityEngine.Vector2，本机没有引擎 DLL，
+         排除在独立验证之外，由 Unity Test Runner 编译运行。 -->
+    <Compile Include="../CPPRogue/Assets/Scripts/Core/**/*.cs"
+             Exclude="../CPPRogue/Assets/Scripts/Core/Physics/*.cs" />
+    <Compile Include="../CPPRogue/Assets/Tests/Editor/**/*.cs"
+             Exclude="../CPPRogue/Assets/Tests/Editor/Physics/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+</Project>
