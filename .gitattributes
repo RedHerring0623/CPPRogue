@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Windows 批处理脚本必须用 CRLF，否则可能出现解析问题
+*.bat text eol=crlf

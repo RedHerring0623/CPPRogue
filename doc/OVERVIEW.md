@@ -15,6 +15,7 @@
 | [COMPUTING.md](COMPUTING.md) | CPU 周期资源 | `Assets/Scripts/Core/Computing/` |
 | [PHYSICS.md](PHYSICS.md) | 碰撞判定 | `Assets/Scripts/Core/Physics/` |
 | [DEMO_UI.md](DEMO_UI.md) | 执行可视化 Demo（开发期演示，非 Unity） | `DemoUI/` |
+| [PRESENTATION.md](PRESENTATION.md) | Unity 表现层（2D 俯视角视图/TickDriver） | `Assets/Scripts/Game/` |
 
 **规则**：新功能块（Fragment 掉落、Affix 词缀、怪物三档、表现层 TickDriver…）落地时，
 在 `doc/` 新建对应文档并登记到这张表；各模块的语义决策写在自己文档里，全局约定只写在这份总览。
@@ -146,8 +147,9 @@ ICombatWorld ←── FakeCombatWorld（单测）/ Unity 实现（表现层）
 安全阀（Hung / 优化掉 / 未定义引用）、三个 builtin、Routine 行数上限、圆形碰撞、
 **步骤机**（Execute 迭代器，UI 逐句驱动 + 懒执行）、**SourcePrinter** 源码排版、
 **RoutineEditor 拼装编辑器**（插入/移动/删除 + 防呆）、
-**执行可视化 Demo**（DemoUI，含拖拽拼装）。
-测试：69 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics）。
+**执行可视化 Demo**（DemoUI，含拖拽拼装）、
+**Unity 表现层**（2D 俯视角 + TickDriver + attack 发射子弹，团结引擎批处理编译验证通过）。
+测试：69 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics，待编辑器 Test Runner 首跑）。
 
 **未实现**（按建议顺序）：
 

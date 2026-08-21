@@ -8,3 +8,6 @@
 bin/
 obj/
 TestResults/
+
+# 打包脚本产生的日志
+*.log
