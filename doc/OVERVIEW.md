@@ -14,6 +14,7 @@
 | [COMBAT.md](COMBAT.md) | 战斗端口与变量黑板 | `Assets/Scripts/Core/Combat/` |
 | [COMPUTING.md](COMPUTING.md) | CPU 周期资源 | `Assets/Scripts/Core/Computing/` |
 | [PHYSICS.md](PHYSICS.md) | 碰撞判定 | `Assets/Scripts/Core/Physics/` |
+| [DEMO_UI.md](DEMO_UI.md) | 执行可视化 Demo（开发期演示，非 Unity） | `DemoUI/` |
 
 **规则**：新功能块（Fragment 掉落、Affix 词缀、怪物三档、表现层 TickDriver…）落地时，
 在 `doc/` 新建对应文档并登记到这张表；各模块的语义决策写在自己文档里，全局约定只写在这份总览。
@@ -44,6 +45,7 @@ CPPRogue/（仓库根）
 ├─ IDEA.md                       策划设计稿
 ├─ doc/                          开发文档（按功能块拆分）
 ├─ StandaloneTests/              dotnet 快速验证工程（链接源码，不复制）
+├─ DemoUI/                       执行可视化 Demo（WinForms，dotnet run 直接跑）
 └─ CPPRogue/                     Unity 工程根
    ├─ Assets/
    │  ├─ Scripts/Core/           逻辑层（asmdef: CPPRogue.Core）
@@ -60,8 +62,11 @@ CPPRogue/（仓库根）
 | dotnet 快速验证 | 仓库根目录 `dotnet test StandaloneTests/CPPRogue.Core.StandaloneTests.csproj` | 无 Unity 机器上的秒级反馈 |
 
 `StandaloneTests/` 的 csproj 通过 `<Compile Include>` 直接链接 Unity 项目里的源文件（单一事实来源）。
-它排除了 `Physics/`（用了 `UnityEngine.Vector2`，本机无引擎 DLL），所以 dotnet 跑 40 个，
+它排除了 `Physics/`（用了 `UnityEngine.Vector2`，本机无引擎 DLL），所以 dotnet 跑 69 个，
 Unity Test Runner 会多跑 6 个（CircleOverlap 的测试）。
+
+**执行可视化 Demo**：`dotnet run --project DemoUI`——真解释器驱动，语句高亮/优化掉灰显/
+Hung 红显/单步/快进/间隔可调，用来看"代码执行"的观感。详见 [DEMO_UI.md](DEMO_UI.md)。
 
 ---
 
@@ -138,8 +143,11 @@ ICombatWorld ←── FakeCombatWorld（单测）/ Unity 实现（表现层）
 ## 7. 当前状态与路线图
 
 **已实现**：AST 三件套、解释器全部基础语句、表达式求值、变量黑板、CPU 周期系统、
-安全阀（Hung / 优化掉 / 未定义引用）、三个 builtin、Routine 行数上限、圆形碰撞。
-测试：40 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics）。
+安全阀（Hung / 优化掉 / 未定义引用）、三个 builtin、Routine 行数上限、圆形碰撞、
+**步骤机**（Execute 迭代器，UI 逐句驱动 + 懒执行）、**SourcePrinter** 源码排版、
+**RoutineEditor 拼装编辑器**（插入/移动/删除 + 防呆）、
+**执行可视化 Demo**（DemoUI，含拖拽拼装）。
+测试：69 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics）。
 
 **未实现**（按建议顺序）：
 

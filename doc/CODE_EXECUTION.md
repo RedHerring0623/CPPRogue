@@ -61,7 +61,33 @@
 | 语句数上限 | 单 tick 语句总数超过 `MaxStatementsPerTick`（默认 10000）→ `Hung` |
 | 未知函数 | 抛 `UndefinedReferenceException`（`undefined reference to ...`） |
 
-`RunTick(Routine, ExecContext)` 开头自动重置周期预算和统计计数。
+`RunTick` 开头自动重置周期预算和统计计数。
+
+### 步骤机（UI 驱动的执行方式）
+
+解释器有两种用法：
+
+- `RunTick(routine, ctx)` —— 一口气跑完（单测/模拟器用，瞬间返回）；
+- `Execute(routine, ctx)` —— **步骤机**：`IEnumerable<StepInfo>` 迭代器，一次拉一步 = 执行一条语句。
+
+步骤机是**懒执行**的：语句在"被拉取的那一刻"才执行——驱动层控制节奏，
+代码跑的期间世界照常演化（走位、怪物移动，`attack()` 打的是那一刻最近的敌人）。
+单测把迭代器一口气排空（foreach 不等待），确定性和速度都不受影响。
+
+每步携带 `StepInfo { Statement, Status }`：
+
+| Status | 含义 | UI 表现 |
+|---|---|---|
+| `Executed` | 正常执行 | 高亮当前行；循环每圈重新高亮 for/while 行 |
+| `OptimizedOut` | 周期不足被优化掉 | 灰显 + 日志"被优化掉" |
+| `Hung` | 死循环/超限被 kill | 红显，本 tick 终止 |
+
+`Statement` 是 Block 引用——UI 用它和 `SourcePrinter` 输出的行做引用比对来定位高亮。
+
+**时间不属于逻辑层**：`StatementInterval`（语句间隔，默认建议 0.2s）、`TickInterval`
+和调度规则（下一 Tick = max(固定间隔到点, 程序跑完时刻)）都在驱动层实现
+（DemoUI 已按此实现，见 [DEMO_UI.md](DEMO_UI.md)；Unity 侧 `TickDriver` 照抄）。
+慢代码错过 tick 是有意的压力设计，最坏情况被 CPU 预算封顶（约 32 次语句执行 × 0.2s）。
 
 **调用语句的执行顺序**：按名解析 builtin → 扣周期 → 求值参数 → `Invoke`。
 顺序有意义：解析失败先于扣费（未定义引用不花钱），周期不足时参数不会被求值。
@@ -82,11 +108,32 @@
 | `Limits`（InterpreterLimits） | 安全阀参数 |
 | `Tick` | 当前 tick 序号，由游戏循环驱动（解释器不自增） |
 | `SkippedByBudget` / `StatementsExecuted` | 本 tick 统计（UI 反馈/安全阀） |
+| `HungThisTick` | 本 tick 是否因死循环/超限被强制终止 |
 
 ### Routine —— 拼装的函数
 
 `Lines`（Block[]）+ `MaxLines`（默认 8，§4 行数上限；超出抛异常，装备可扩展）。
-玩家、怪物、Boss 的程序统一是 Routine。
+玩家、怪物、Boss 的程序统一是 Routine。**行数按语句总数算（嵌套语句计入）**。
+
+### RoutineEditor —— 拼装编辑器（防呆）
+
+UI 不直接改语句树，只调用编辑器操作，拼装规则因此可单测：
+
+| 操作 | 防呆规则 |
+|---|---|
+| `Insert(slot, block)` | 位置合法 + 语句总数（含嵌套）不超 `MaxLines` |
+| `Move(from, to)` | 目标不能在被移动语句自己的子树内；原地/紧邻后视为无变化 |
+| `Remove(slot)` | 删除语句连同子语句 |
+
+`Slot(Owner, Branch, Index)` 定位拼装位置：Owner 为 null = 根；
+Branch 0 = then/循环体、1 = if 的 else；Index 是缝隙下标。
+配套工具：`BlockTree`（计数/取体/子树包含）、`BlockCloner`（深拷贝，预设加载用）。
+
+### SourcePrinter —— Routine 反排版成源码
+
+`Print(routine)` 输出 `SourceLine` 列表（文本 + 缩进 + Block 引用；括号行的 Statement 为 null）。
+两处消费：UI 源码面板（配合 `StepInfo.Statement` 引用比对定位高亮行）、
+未来的 Boss 屏显源码（所读即所跑）。
 
 ---
 
@@ -137,6 +184,9 @@ Invoke(ctx, args)  执行；不持有状态，副作用只走 ctx.World
 | `Tests/Editor/Code/Runtime/InterpreterTests.cs` | 全语句类型、参数化（变量/表达式参数、变量上限/步长的循环）、Hung、优化掉、return |
 | `Tests/Editor/Code/BuiltinTableTests.cs` | 词汇表注册、重名、自定义技能可调用 |
 | `Tests/Editor/Code/RoutineTests.cs` | 行数上限 |
+| `Tests/Editor/Code/Runtime/InterpreterStepTests.cs` | 步骤机契约：懒执行、引用定位、状态、Hung |
+| `Tests/Editor/Code/SourcePrinterTests.cs` | 源码排版 |
+| `Tests/Editor/Code/RoutineEditorTests.cs` | 拼装编辑器防呆（插入/移动/删除/行数）+ BlockTree/BlockCloner |
 | `Tests/Editor/Fakes/FakeCombatWorld.cs` | 测试替身（记录世界调用） |
 
 跑法见 [OVERVIEW.md §2](OVERVIEW.md)。
@@ -151,3 +201,4 @@ Invoke(ctx, args)  执行；不持有状态，副作用只走 ctx.World
 - `switch` 语句
 - Routine 的 JSON 序列化（存档 / 仓库 / Boss 屏显）
 - 函数返回值（目前 builtin 无返回值，表达式层无函数调用）
+- Unity 表现层 `TickDriver`（DemoUI 是现成蓝本，见 [DEMO_UI.md](DEMO_UI.md)）

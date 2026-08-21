@@ -23,8 +23,9 @@ namespace CPPRogue.Core.Code
             Lines = lines ?? System.Array.Empty<Block>();
             if (maxLines < 0)
                 throw new System.ArgumentOutOfRangeException(nameof(maxLines), "行数上限不能为负数。");
-            if (Lines.Length > maxLines)
-                throw new System.ArgumentOutOfRangeException(nameof(lines), $"函数超过行数上限：{Lines.Length}/{maxLines} 行。");
+            int total = BlockTree.CountStatements(Lines);
+            if (total > maxLines)
+                throw new System.ArgumentOutOfRangeException(nameof(lines), $"函数超过行数上限：{total}/{maxLines} 行（嵌套语句计入行数）。");
             MaxLines = maxLines;
         }
 

@@ -47,6 +47,9 @@ namespace CPPRogue.Core.Code.Runtime
         /// <summary>本 tick 已执行语句数（安全阀用）。</summary>
         public int StatementsExecuted { get; internal set; }
 
+        /// <summary>本 tick 是否因死循环/超限被强制终止（由步骤机置位）。</summary>
+        public bool HungThisTick { get; internal set; }
+
         public ExecContext(
             ICombatWorld world,
             BuiltinTable functions = null,

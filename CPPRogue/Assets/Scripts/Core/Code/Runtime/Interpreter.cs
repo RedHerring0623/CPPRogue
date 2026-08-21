@@ -1,36 +1,56 @@
+using System.Collections.Generic;
 using CPPRogue.Core.Code.Ast;
 using CPPRogue.Core.Code.Builtins;
 
 namespace CPPRogue.Core.Code.Runtime
 {
     /// <summary>
-    /// 唯一的执行者。安全阀（CPU 扣费、循环上限、语句数上限）全部集中在这一个文件里，
-    /// 不会散落到各语句类；语句语义在 Block 数据 + builtin 里，这里只做控制流。
+    /// 唯一的执行者。安全阀（CPU 扣费、循环上限、语句数上限）全部集中在这一个文件里。
+    /// 两种用法：
+    /// ① RunTick —— 一口气跑完（单测/模拟器用，瞬间返回）；
+    /// ② Execute —— 步骤机（UI 驱动用）：一次拉一步 = 执行一条语句，驱动层控制节奏，
+    ///    语句在"被拉取的那一刻"才执行——代码跑的期间世界照常演化（走位、怪物移动）。
+    /// 逻辑层没有时间概念，StatementInterval 之类的间隔属于驱动层。
     /// </summary>
     public sealed class Interpreter
     {
         private enum Flow { None, Return, Break, Continue }
 
-        /// <summary>
-        /// 跑一个 tick。开头重置周期预算（§4：预算按 tick 结算）和统计计数。
-        /// 返回 Completed / Hung；被优化掉的语句数见 ctx.SkippedByBudget。
-        /// </summary>
+        /// <summary>控制流信号 + 终止标志的传递盒（迭代器之间不能 return 值，用引用类型传）。</summary>
+        private sealed class FlowBox
+        {
+            public Flow Signal = Flow.None;
+        }
+
+        /// <summary>兼容入口：同步跑完一整个 tick，返回执行结果。</summary>
         public ExecResult RunTick(Routine routine, ExecContext ctx)
         {
             if (routine == null)
                 throw new System.ArgumentNullException(nameof(routine));
+            foreach (StepInfo _ in Execute(routine, ctx)) { }
+            return ctx.HungThisTick ? ExecResult.Hung : ExecResult.Completed;
+        }
+
+        /// <summary>
+        /// 步骤机：开始一个 tick，逐条吐出语句执行步骤（懒执行）。
+        /// 开头重置周期预算（§4：预算按 tick 结算）和统计计数。
+        /// 未知函数仍抛 UndefinedReferenceException（由拉取方捕获）。
+        /// </summary>
+        public IEnumerable<StepInfo> Execute(Routine routine, ExecContext ctx)
+        {
+            if (routine == null)
+                throw new System.ArgumentNullException(nameof(routine));
+            if (ctx == null)
+                throw new System.ArgumentNullException(nameof(ctx));
+
             ctx.Budget.Reset();
             ctx.SkippedByBudget = 0;
             ctx.StatementsExecuted = 0;
-            try
-            {
-                ExecuteBody(routine.Lines, ctx);
-                return ExecResult.Completed;
-            }
-            catch (InterpreterHungException)
-            {
-                return ExecResult.Hung;
-            }
+            ctx.HungThisTick = false;
+
+            var box = new FlowBox();
+            foreach (StepInfo step in ExecuteBody(routine.Lines, ctx, box))
+                yield return step;
         }
 
         /// <summary>表达式求值（公开给词缀等未来扩展用）。</summary>
@@ -59,78 +79,125 @@ namespace CPPRogue.Core.Code.Runtime
             }
         }
 
-        private Flow ExecuteBody(Block[] body, ExecContext ctx)
+        private IEnumerable<StepInfo> ExecuteBody(Block[] body, ExecContext ctx, FlowBox box)
         {
             for (int i = 0; i < body.Length; i++)
             {
-                Flow flow = ExecuteStatement(body[i], ctx);
-                if (flow != Flow.None)
-                    return flow; // return/break/continue 向上传播，由对应层级消费
+                foreach (StepInfo step in ExecuteStatement(body[i], ctx, box))
+                {
+                    yield return step;
+                    if (ctx.HungThisTick || box.Signal != Flow.None)
+                        yield break; // 卡死或 return/break/continue：后续语句不再执行，信号交给上层
+                }
+                if (ctx.HungThisTick || box.Signal != Flow.None)
+                    yield break;
             }
-            return Flow.None;
         }
 
-        private Flow ExecuteStatement(Block s, ExecContext ctx)
+        private IEnumerable<StepInfo> ExecuteStatement(Block s, ExecContext ctx, FlowBox box)
         {
             ctx.StatementsExecuted++;
             if (ctx.StatementsExecuted > ctx.Limits.MaxStatementsPerTick)
-                throw new InterpreterHungException("本 tick 语句数超过上限");
+            {
+                ctx.HungThisTick = true;
+                yield return new StepInfo(s, StepStatus.Hung);
+                yield break;
+            }
 
             switch (s.Kind)
             {
                 case BlockKind.Call:
-                    return DoCall(s, ctx);
+                    if (!ctx.Functions.TryGet(s.CallName, out IBuiltin fn))
+                        throw new UndefinedReferenceException(s.CallName);
+                    if (!ctx.Budget.TrySpend(fn.CpuCost))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
+                    // 参数在调用前求值——attack(n) 的 n 在此刻从黑板/属性解析成 Value
+                    var args = new Value[s.Args.Length];
+                    for (int i = 0; i < args.Length; i++)
+                        args[i] = Eval(s.Args[i], ctx);
+                    fn.Invoke(ctx, args);
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    yield break;
 
                 case BlockKind.Assign:
-                    if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
+                    if (!ctx.Budget.TrySpend(1))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
                     ctx.Vars.TrySet(s.Target, Eval(s.ValueExpr, ctx));
-                    return Flow.None;
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    yield break;
 
                 case BlockKind.If:
-                    if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
-                    return ExecuteBody(Eval(s.Condition, ctx).AsBool() ? s.Body : s.ElseBody, ctx);
+                    if (!ctx.Budget.TrySpend(1))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    foreach (StepInfo step in ExecuteBody(Eval(s.Condition, ctx).AsBool() ? s.Body : s.ElseBody, ctx, box))
+                        yield return step;
+                    yield break;
 
                 case BlockKind.For:
-                    return DoFor(s, ctx);
+                    foreach (StepInfo step in DoFor(s, ctx, box))
+                        yield return step;
+                    yield break;
 
                 case BlockKind.While:
-                    return DoWhile(s, ctx);
+                    foreach (StepInfo step in DoWhile(s, ctx, box))
+                        yield return step;
+                    yield break;
 
                 case BlockKind.Return:
-                    if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
-                    return Flow.Return;
+                    if (!ctx.Budget.TrySpend(1))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
+                    box.Signal = Flow.Return;
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    yield break;
 
                 case BlockKind.Break:
-                    if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
-                    return Flow.Break;
+                    if (!ctx.Budget.TrySpend(1))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
+                    box.Signal = Flow.Break;
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    yield break;
 
                 case BlockKind.Continue:
-                    if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
-                    return Flow.Continue;
+                    if (!ctx.Budget.TrySpend(1))
+                    {
+                        ctx.SkippedByBudget++;
+                        yield return new StepInfo(s, StepStatus.OptimizedOut);
+                        yield break;
+                    }
+                    box.Signal = Flow.Continue;
+                    yield return new StepInfo(s, StepStatus.Executed);
+                    yield break;
 
                 default:
                     throw new System.InvalidOperationException($"未知的语句类型：{s.Kind}");
             }
         }
 
-        private Flow DoCall(Block s, ExecContext ctx)
+        // for (LoopVar = Init; Condition; LoopVar += Step) { Body }
+        // for 行每圈高亮一次（调试器习惯：转一圈亮一下）
+        private IEnumerable<StepInfo> DoFor(Block s, ExecContext ctx, FlowBox box)
         {
-            if (!ctx.Functions.TryGet(s.CallName, out IBuiltin fn))
-                throw new UndefinedReferenceException(s.CallName);
-            if (!ctx.Budget.TrySpend(fn.CpuCost)) { ctx.SkippedByBudget++; return Flow.None; }
-
-            // 参数在调用前求值——attack(n) 的 n 在此刻从黑板/属性解析成 Value
-            var args = new Value[s.Args.Length];
-            for (int i = 0; i < args.Length; i++)
-                args[i] = Eval(s.Args[i], ctx);
-
-            fn.Invoke(ctx, args);
-            return Flow.None;
-        }
-
-        private Flow DoFor(Block s, ExecContext ctx)
-        {
-            // for (LoopVar = Init; Condition; LoopVar += Step) { Body }
             if (s.LoopVar != null && s.Init != null)
                 ctx.Vars.TrySet(s.LoopVar, Eval(s.Init, ctx));
 
@@ -138,37 +205,89 @@ namespace CPPRogue.Core.Code.Runtime
             while (s.Condition == null || Eval(s.Condition, ctx).AsBool())
             {
                 if (++iterations > ctx.Limits.MaxLoopIterations)
-                    throw new InterpreterHungException("for 循环迭代超过上限");
-                if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; } // 每次迭代的循环开销
+                {
+                    ctx.HungThisTick = true;
+                    yield return new StepInfo(s, StepStatus.Hung);
+                    yield break;
+                }
+                if (!ctx.Budget.TrySpend(1)) // 每次迭代的循环开销
+                {
+                    ctx.SkippedByBudget++;
+                    yield return new StepInfo(s, StepStatus.OptimizedOut);
+                    yield break;
+                }
 
-                Flow flow = ExecuteBody(s.Body, ctx);
-                if (flow == Flow.Break)
-                    break;
-                if (flow != Flow.None)
-                    return flow; // return/continue 交给外层处理
+                yield return new StepInfo(s, StepStatus.Executed);
+
+                foreach (StepInfo step in ExecuteBody(s.Body, ctx, box))
+                {
+                    yield return step;
+                    if (ctx.HungThisTick || box.Signal != Flow.None)
+                        yield break;
+                }
+                if (ctx.HungThisTick)
+                    yield break;
+                if (box.Signal == Flow.Break)
+                {
+                    box.Signal = Flow.None; // break 被本循环消费
+                    yield break;
+                }
+                if (box.Signal == Flow.Continue)
+                {
+                    box.Signal = Flow.None; // continue 被本循环消费，进入下一圈
+                }
+                else if (box.Signal == Flow.Return)
+                {
+                    yield break; // return 穿透到函数顶层
+                }
 
                 if (s.LoopVar != null && s.Step != null && ctx.Vars.TryGet(s.LoopVar, out Value current))
                     ctx.Vars.TrySet(s.LoopVar, Value.Of(current.AsNumber() + Eval(s.Step, ctx).AsNumber()));
             }
-            return Flow.None;
         }
 
-        private Flow DoWhile(Block s, ExecContext ctx)
+        private IEnumerable<StepInfo> DoWhile(Block s, ExecContext ctx, FlowBox box)
         {
             int iterations = 0;
             while (s.Condition == null || Eval(s.Condition, ctx).AsBool())
             {
                 if (++iterations > ctx.Limits.MaxLoopIterations)
-                    throw new InterpreterHungException("while 死循环，迭代超过上限");
-                if (!ctx.Budget.TrySpend(1)) { ctx.SkippedByBudget++; return Flow.None; }
+                {
+                    ctx.HungThisTick = true;
+                    yield return new StepInfo(s, StepStatus.Hung);
+                    yield break;
+                }
+                if (!ctx.Budget.TrySpend(1))
+                {
+                    ctx.SkippedByBudget++;
+                    yield return new StepInfo(s, StepStatus.OptimizedOut);
+                    yield break;
+                }
 
-                Flow flow = ExecuteBody(s.Body, ctx);
-                if (flow == Flow.Break)
-                    break;
-                if (flow != Flow.None)
-                    return flow;
+                yield return new StepInfo(s, StepStatus.Executed);
+
+                foreach (StepInfo step in ExecuteBody(s.Body, ctx, box))
+                {
+                    yield return step;
+                    if (ctx.HungThisTick || box.Signal != Flow.None)
+                        yield break;
+                }
+                if (ctx.HungThisTick)
+                    yield break;
+                if (box.Signal == Flow.Break)
+                {
+                    box.Signal = Flow.None;
+                    yield break;
+                }
+                if (box.Signal == Flow.Continue)
+                {
+                    box.Signal = Flow.None;
+                }
+                else if (box.Signal == Flow.Return)
+                {
+                    yield break;
+                }
             }
-            return Flow.None;
         }
 
         private Value EvalBinary(Expr e, ExecContext ctx)

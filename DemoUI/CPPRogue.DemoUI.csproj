@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    代码执行可视化 Demo：WinForms 壳 + 链接 Unity 项目里的同一份 Core 源码（真解释器驱动）。
+    运行：仓库根目录执行 dotnet run，并指定 project 为 DemoUI。不需要 Unity。
+    它也是将来 Unity 表现层 TickDriver 的设计蓝本（StatementInterval / max 调度规则）。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>CPPRogue.DemoUI</AssemblyName>
+    <RootNamespace>CPPRogue.DemoUI</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="**/*.cs" Exclude="obj/**;bin/**" />
+    <Compile Include="../CPPRogue/Assets/Scripts/Core/**/*.cs"
+             Exclude="../CPPRogue/Assets/Scripts/Core/Physics/*.cs" />
+  </ItemGroup>
+
+</Project>

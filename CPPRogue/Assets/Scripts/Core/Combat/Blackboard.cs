@@ -42,5 +42,11 @@ namespace CPPRogue.Core.Combat
         {
             _vars.Clear();
         }
+
+        /// <summary>变量快照（UI/调试展示用，拷贝一份避免边遍历边改）。</summary>
+        public System.Collections.Generic.IReadOnlyDictionary<string, Value> Snapshot()
+        {
+            return new System.Collections.Generic.Dictionary<string, Value>(_vars);
+        }
     }
 }
