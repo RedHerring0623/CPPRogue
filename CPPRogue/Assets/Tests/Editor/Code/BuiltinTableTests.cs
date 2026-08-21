@@ -39,7 +39,7 @@ namespace CPPRogue.Core.Tests.Code
             var world = new FakeCombatWorld();
             var ctx = new ExecContext(world, table);
 
-            new Interpreter().RunTick(new[] { Block.Call("ping") }, ctx);
+            new Interpreter().RunTick(new Routine(new[] { Block.Call("ping") }), ctx);
 
             Assert.AreEqual(1, world.Heals.Count);
         }

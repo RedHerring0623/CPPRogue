@@ -9,7 +9,7 @@ using CPPRogue.Core.Tests.Fakes;
 namespace CPPRogue.Core.Tests.Code.Runtime
 {
     /// <summary>
-    /// 解释器的单元测试：验证"拼一段程序 → 跑若干 tick → 世界收到正确的调用序列"整条链。
+    /// 解释器的单元测试：验证"拼一段 Routine → 跑若干 tick → 世界收到正确的调用序列"整条链。
     /// 重点覆盖参数化：attack(n)、for(i=0; i&lt;x; i++) 的 n、x 都来自变量。
     /// </summary>
     [TestFixture]
@@ -25,13 +25,19 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             return new ExecContext(world, BuiltinTable.CreateDefault(), budget, vars, null, limits, properties);
         }
 
+        /// <summary>测试速记：几行语句直接拼成一个 Routine。</summary>
+        private static Routine Rt(params Block[] lines)
+        {
+            return new Routine(lines);
+        }
+
         [Test]
         public void Call_Attack_NoArgs_UsesDefaultDamage()
         {
             var world = new FakeCombatWorld();
             var ctx = NewContext(world);
 
-            new Interpreter().RunTick(new[] { Block.Call("attack") }, ctx);
+            new Interpreter().RunTick(Rt(Block.Call("attack")), ctx);
 
             Assert.AreEqual(1, world.Attacks.Count);
             Assert.AreEqual(10f, world.Attacks[0].Damage, 0.0001f);
@@ -43,7 +49,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var world = new FakeCombatWorld();
             var ctx = NewContext(world);
 
-            new Interpreter().RunTick(new[] { Block.Call("attack", Expr.Num(25)) }, ctx);
+            new Interpreter().RunTick(Rt(Block.Call("attack", Expr.Num(25))), ctx);
 
             Assert.AreEqual(1, world.Attacks.Count);
             Assert.AreEqual(25f, world.Attacks[0].Damage, 0.0001f);
@@ -58,7 +64,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             vars.TrySet("n", Value.Of(30));
             var ctx = NewContext(world, vars: vars);
 
-            new Interpreter().RunTick(new[] { Block.Call("attack", Expr.Var("n")) }, ctx);
+            new Interpreter().RunTick(Rt(Block.Call("attack", Expr.Var("n"))), ctx);
 
             Assert.AreEqual(30f, world.Attacks[0].Damage, 0.0001f);
         }
@@ -74,7 +80,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var ctx = NewContext(world, vars: vars);
 
             var arg = Expr.Bin(BinaryOp.Mul, Expr.Var("n"), Expr.Var("m"));
-            new Interpreter().RunTick(new[] { Block.Call("attack", arg) }, ctx);
+            new Interpreter().RunTick(Rt(Block.Call("attack", arg)), ctx);
 
             Assert.AreEqual(10f, world.Attacks[0].Damage, 0.0001f);
         }
@@ -88,8 +94,8 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var ctx = NewContext(world, vars: vars);
             var interp = new Interpreter();
 
-            interp.RunTick(new[] { Block.Assign("a", Expr.Num(5)) }, ctx);
-            interp.RunTick(new[] { Block.Call("attack", Expr.Var("a")) }, ctx);
+            interp.RunTick(Rt(Block.Assign("a", Expr.Num(5))), ctx);
+            interp.RunTick(Rt(Block.Call("attack", Expr.Var("a"))), ctx);
 
             Assert.AreEqual(5f, world.Attacks[0].Damage, 0.0001f);
         }
@@ -100,7 +106,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var vars = new Blackboard();
             var ctx = NewContext(new FakeCombatWorld(), vars: vars);
 
-            new Interpreter().RunTick(new[] { Block.Assign("a", Expr.Bin(BinaryOp.Add, Expr.Num(2), Expr.Num(3))) }, ctx);
+            new Interpreter().RunTick(Rt(Block.Assign("a", Expr.Bin(BinaryOp.Add, Expr.Num(2), Expr.Num(3)))), ctx);
 
             Assert.IsTrue(vars.TryGet("a", out Value v));
             Assert.AreEqual(5, v.AsNumber(), 0.0001);
@@ -118,7 +124,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("i"), Expr.Num(3)),
                 Expr.Num(1),
                 Block.Call("attack"));
-            new Interpreter().RunTick(new[] { loop }, ctx);
+            new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.AreEqual(3, world.Attacks.Count);
         }
@@ -137,7 +143,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("i"), Expr.Var("x")),
                 Expr.Num(1),
                 Block.Call("heal", Expr.Num(1)));
-            new Interpreter().RunTick(new[] { loop }, ctx);
+            new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.AreEqual(4, world.Heals.Count);
         }
@@ -156,7 +162,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("i"), Expr.Num(10)),
                 Expr.Var("s"),
                 Block.Call("attack"));
-            new Interpreter().RunTick(new[] { loop }, ctx);
+            new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.AreEqual(4, world.Attacks.Count);
         }
@@ -174,7 +180,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Num(1),
                 Block.If(Expr.Bin(BinaryOp.Gt, Expr.Var("i"), Expr.Num(1)), new[] { Block.Break() }),
                 Block.Call("attack"));
-            new Interpreter().RunTick(new[] { loop }, ctx);
+            new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.AreEqual(2, world.Attacks.Count);
         }
@@ -192,7 +198,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("i"), Expr.Num(5)),
                 Expr.Num(1),
                 Block.Call("attack"));
-            new Interpreter().RunTick(new[] { loop }, ctx);
+            new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.IsTrue(vars.TryGet("i", out Value i));
             Assert.AreEqual(5, i.AsNumber(), 0.0001);
@@ -213,7 +219,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("hp"), Expr.Num(0.3)),
                 new[] { Block.Call("heal", Expr.Num(50)) },
                 new[] { Block.Call("attack") });
-            new Interpreter().RunTick(new[] { branch }, ctx);
+            new Interpreter().RunTick(Rt(branch), ctx);
 
             Assert.AreEqual(1, world.Heals.Count);
             Assert.AreEqual(50f, world.Heals[0], 0.0001f);
@@ -234,7 +240,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
                 Expr.Bin(BinaryOp.Lt, Expr.Var("hp"), Expr.Num(0.3)),
                 new[] { Block.Call("heal", Expr.Num(50)) },
                 new[] { Block.Call("attack") });
-            new Interpreter().RunTick(new[] { branch }, ctx);
+            new Interpreter().RunTick(Rt(branch), ctx);
 
             Assert.AreEqual(0, world.Heals.Count);
             Assert.AreEqual(1, world.Attacks.Count);
@@ -247,7 +253,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var world = new FakeCombatWorld();
             var ctx = NewContext(world);
 
-            new Interpreter().RunTick(new[] { Block.Call("attack", Expr.Var("nope")) }, ctx);
+            new Interpreter().RunTick(Rt(Block.Call("attack", Expr.Var("nope"))), ctx);
 
             Assert.AreEqual(0f, world.Attacks[0].Damage, 0.0001f);
         }
@@ -260,7 +266,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var ctx = NewContext(world, budget: new CpuBudget(2));
 
             var result = new Interpreter().RunTick(
-                new[] { Block.Call("attack"), Block.Call("attack") }, ctx);
+                Rt(Block.Call("attack"), Block.Call("attack")), ctx);
 
             Assert.AreEqual(ExecResult.Completed, result);
             Assert.AreEqual(1, world.Attacks.Count);
@@ -275,8 +281,8 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var ctx = NewContext(world, budget: new CpuBudget(2));
             var interp = new Interpreter();
 
-            interp.RunTick(new[] { Block.Call("attack"), Block.Call("attack") }, ctx);
-            interp.RunTick(new[] { Block.Call("attack") }, ctx);
+            interp.RunTick(Rt(Block.Call("attack"), Block.Call("attack")), ctx);
+            interp.RunTick(Rt(Block.Call("attack")), ctx);
 
             Assert.AreEqual(2, world.Attacks.Count);
         }
@@ -289,7 +295,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var limits = new InterpreterLimits { MaxLoopIterations = 5 };
             var ctx = NewContext(world, budget: new CpuBudget(64), limits: limits);
 
-            var result = new Interpreter().RunTick(new[] { Block.While(null, Block.Call("attack")) }, ctx);
+            var result = new Interpreter().RunTick(Rt(Block.While(null, Block.Call("attack"))), ctx);
 
             Assert.AreEqual(ExecResult.Hung, result);
             Assert.AreEqual(5, world.Attacks.Count);
@@ -306,7 +312,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var loop = Block.While(null,
                 Block.Assign("a", Expr.Bin(BinaryOp.Add, Expr.Var("a"), Expr.Num(1))),
                 Block.If(Expr.Bin(BinaryOp.Gt, Expr.Var("a"), Expr.Num(2)), new[] { Block.Break() }));
-            var result = new Interpreter().RunTick(new[] { loop }, ctx);
+            var result = new Interpreter().RunTick(Rt(loop), ctx);
 
             Assert.AreEqual(ExecResult.Completed, result);
             Assert.IsTrue(vars.TryGet("a", out Value a));
@@ -319,7 +325,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var world = new FakeCombatWorld();
             var ctx = NewContext(world);
 
-            new Interpreter().RunTick(new[] { Block.Return(), Block.Call("attack") }, ctx);
+            new Interpreter().RunTick(Rt(Block.Return(), Block.Call("attack")), ctx);
 
             Assert.AreEqual(0, world.Attacks.Count);
         }
@@ -330,7 +336,7 @@ namespace CPPRogue.Core.Tests.Code.Runtime
             var ctx = NewContext(new FakeCombatWorld());
 
             Assert.Throws<UndefinedReferenceException>(
-                () => new Interpreter().RunTick(new[] { Block.Call("fireball") }, ctx));
+                () => new Interpreter().RunTick(Rt(Block.Call("fireball")), ctx));
         }
     }
 }

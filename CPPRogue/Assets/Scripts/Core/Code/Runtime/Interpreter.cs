@@ -15,14 +15,16 @@ namespace CPPRogue.Core.Code.Runtime
         /// 跑一个 tick。开头重置周期预算（§4：预算按 tick 结算）和统计计数。
         /// 返回 Completed / Hung；被优化掉的语句数见 ctx.SkippedByBudget。
         /// </summary>
-        public ExecResult RunTick(Block[] program, ExecContext ctx)
+        public ExecResult RunTick(Routine routine, ExecContext ctx)
         {
+            if (routine == null)
+                throw new System.ArgumentNullException(nameof(routine));
             ctx.Budget.Reset();
             ctx.SkippedByBudget = 0;
             ctx.StatementsExecuted = 0;
             try
             {
-                ExecuteBody(program ?? System.Array.Empty<Block>(), ctx);
+                ExecuteBody(routine.Lines, ctx);
                 return ExecResult.Completed;
             }
             catch (InterpreterHungException)
