@@ -16,6 +16,10 @@ namespace CPPRogue.Game
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Run()
         {
+            // 打包版启动即"无边框窗口填满屏幕"：窗口化不独占显示，Alt+Tab 友好
+            if (!Application.isEditor)
+                Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
+
             // 相机：复用场景里的 Main Camera，改成 2D 正交
             Camera cam = Camera.main != null ? Camera.main : new GameObject("Main Camera").AddComponent<Camera>();
             cam.orthographic = true;

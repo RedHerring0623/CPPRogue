@@ -17,6 +17,9 @@ namespace CPPRogue.Tools
         [MenuItem("CRogue/打包 Windows EXE")]
         public static void BuildWindows()
         {
+            // 启动默认：无边框窗口填满屏幕（窗口化，不独占显示）
+            PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
+
             BuildReport report = BuildPipeline.BuildPlayer(
                 new[] { Scene },
                 OutputPath,
