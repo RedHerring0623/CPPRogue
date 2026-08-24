@@ -1,5 +1,6 @@
 using CPPRogue.Core.Code;
 using CPPRogue.Core.Code.Ast;
+using CPPRogue.Core.Enemies;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -58,10 +59,18 @@ namespace CPPRogue.Game
             Routine routine = editor.BuildRoutine();
             hud.Rebuild(routine);
 
-            // 战斗世界：attack() → 发射随机方向子弹
+            // 战斗世界：attack() → 瞄准最近敌人；heal() → EnemySim 血量
             CombatWorldBridge world = playerGo.AddComponent<CombatWorldBridge>();
             world.Player = player;
             world.Hud = hud;
+
+            // 敌人世界：EnemySim 驱动 + 怪物测试面板（按钮与数字键 1-0 / G / C 等价）
+            player.Speed = StatTable.Speed(3);   // EnemyDesign.md §0：玩家速度参照 spd3
+            var directorGo = new GameObject("EnemyDirector");
+            EnemyDirector director = directorGo.AddComponent<EnemyDirector>();
+            director.Setup(player, hud);
+            world.Director = director;
+            canvasGo.AddComponent<EnemyTestPanel>().Setup(director);
 
             // TickDriver + ESC 暂停编辑
             TickDriver driver = playerGo.AddComponent<TickDriver>();
