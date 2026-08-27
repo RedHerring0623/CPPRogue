@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "note": "怪物汇总投放表。stats/spawnScore 的源头是 EnemyDesign.md，调参时同步此处；掉落规则见 LootDesign.md §4；落地时作为掉落与图鉴的数据源。",
+  "materials": {
+    "timeSlice": "时间片",
+    "ram": "RAM",
+    "driver": "驱动块"
+  },
+  "tiers": {
+    "normal": "普通小怪：35% 掉 1×主材料",
+    "elite": "精英：必掉 2（主材料×1 + 随机一种×1）",
+    "minion": "附属怪：同普通规则，由母体生产不占波次积分"
+  },
+  "enemies": [
+    {
+      "id": "bug",
+      "nameZh": "Bug",
+      "nameEn": "Bug",
+      "tier": "normal",
+      "stats": { "hp": 2, "atk": 1, "spd": 2 },
+      "spawnScore": 1,
+      "mainDrop": "driver",
+      "desc": "第一个被写进世界的缺陷。无法复现，却无处不在。"
+    },
+    {
+      "id": "nullPointer",
+      "nameZh": "空指针",
+      "nameEn": "Null Pointer",
+      "tier": "normal",
+      "stats": { "hp": 1, "atk": 1, "spd": 3 },
+      "spawnScore": 2,
+      "mainDrop": "timeSlice",
+      "desc": "解引用它的那一刻，一切戛然而止。"
+    },
+    {
+      "id": "breakpoint",
+      "nameZh": "断点",
+      "nameEn": "Breakpoint",
+      "tier": "normal",
+      "stats": { "hp": 2, "atk": 1, "spd": 2 },
+      "spawnScore": 2,
+      "mainDrop": "timeSlice",
+      "desc": "命中断点，检查变量，然后按 F5——朝着你继续。"
+    },
+    {
+      "id": "exception",
+      "nameZh": "异常",
+      "nameEn": "Exception",
+      "tier": "normal",
+      "stats": { "hp": 1, "atk": 2, "spd": 2 },
+      "spawnScore": 2,
+      "mainDrop": "driver",
+      "desc": "它抛出的每个异常，都得由你来 catch。"
+    },
+    {
+      "id": "deepCopy",
+      "nameZh": "深拷贝",
+      "nameEn": "Deep Copy",
+      "tier": "elite",
+      "stats": { "hp": 4, "atk": 1, "spd": 2 },
+      "spawnScore": 4,
+      "mainDrop": "ram",
+      "desc": "你以为解决了它，其实只是让它开始备份自己。"
+    },
+    {
+      "id": "watchdog",
+      "nameZh": "看门狗",
+      "nameEn": "Watchdog",
+      "tier": "elite",
+      "stats": { "hp": 3, "atk": 1, "spd": 1 },
+      "spawnScore": 3,
+      "mainDrop": "timeSlice",
+      "desc": "没人喂它，它就打算复位整个世界。"
+    },
+    {
+      "id": "compiling",
+      "nameZh": "编译中",
+      "nameEn": "Compiling",
+      "tier": "elite",
+      "stats": { "hp": 3, "atk": 2, "spd": 3 },
+      "spawnScore": 3,
+      "mainDrop": "driver",
+      "desc": "趁它还在读条动手。等条读完，性质就变了。",
+      "note": "出场为编译态 hp1/atk0/spd0 且受伤×2，读条 5s 后转为上述运行态数值"
+    },
+    {
+      "id": "overheat",
+      "nameZh": "过热",
+      "nameEn": "Overheat",
+      "tier": "elite",
+      "stats": { "hp": 2, "atk": 1, "spd": 4 },
+      "spawnScore": 3,
+      "mainDrop": "timeSlice",
+      "desc": "全速三秒，散热两秒。活过这个节奏你就赢了。"
+    },
+    {
+      "id": "storm",
+      "nameZh": "风暴",
+      "nameEn": "Interrupt Storm",
+      "tier": "elite",
+      "stats": { "hp": 1, "atk": 1, "spd": 2 },
+      "spawnScore": 4,
+      "mainDrop": "driver",
+      "desc": "中断，中断，中断。你上一条指令还没执行完。"
+    },
+    {
+      "id": "parentProcess",
+      "nameZh": "父进程",
+      "nameEn": "Parent Process",
+      "tier": "elite",
+      "stats": { "hp": 4, "atk": 1, "spd": 1 },
+      "spawnScore": 4,
+      "mainDrop": "ram",
+      "desc": "清理子进程没有意义，去找根，一次 reap 到位。",
+      "summons": ["zombie"]
+    },
+    {
+      "id": "zombie",
+      "nameZh": "僵尸进程",
+      "nameEn": "Zombie Process",
+      "tier": "minion",
+      "stats": { "hp": 1, "atk": 1, "spd": 2 },
+      "spawnScore": 0,
+      "mainDrop": "ram",
+      "desc": "已经死了，却还占着进程表的一格。"
+    }
+  ]
+}

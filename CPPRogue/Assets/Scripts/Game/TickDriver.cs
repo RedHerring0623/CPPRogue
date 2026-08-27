@@ -54,6 +54,10 @@ namespace CPPRogue.Game
             var betweenStatements = new WaitForSeconds(StatementInterval);
             while (true)
             {
+                // 进程已终止：不再调度新 tick（死亡弹窗在场；当前 tick 演完即停）
+                while (GameRun.Over)
+                    yield return null;
+
                 _ctx.Tick++;
                 float startedAt = Time.time;
 

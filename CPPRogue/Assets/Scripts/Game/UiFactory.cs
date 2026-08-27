@@ -41,5 +41,14 @@ namespace CPPRogue.Game
             text.verticalOverflow = VerticalWrapMode.Overflow;
             return text;
         }
+
+        /// <summary>在已定位好的 RectTransform 上做纯色按钮（Image + Button + 居中标签），返回 Button 挂回调。</summary>
+        public static Button SolidButton(RectTransform place, string label, Color bg, Color fg, Font font, int fontSize)
+        {
+            place.gameObject.AddComponent<Image>().color = bg;
+            Button button = place.gameObject.AddComponent<Button>();
+            Label(place, label, font, fontSize, fg, TextAnchor.MiddleCenter);
+            return button;
+        }
     }
 }

@@ -14,6 +14,8 @@
 | [COMBAT.md](COMBAT.md) | 战斗端口与变量黑板 | `Assets/Scripts/Core/Combat/` |
 | [COMPUTING.md](COMPUTING.md) | CPU 周期资源 | `Assets/Scripts/Core/Computing/` |
 | [PHYSICS.md](PHYSICS.md) | 碰撞判定 | `Assets/Scripts/Core/Physics/` |
+| [CODEX.md](CODEX.md) | 怪物图鉴与掉落数据：EnemyTable.json / 内置镜像 / MiniJson | `Assets/Scripts/Core/Loot/` + `Game/CodexPanel.cs` |
+| [CODEBASE.md](CODEBASE.md) | 局外代码库：语块阶梯 / 合成 / 材料余额 | `Assets/Scripts/Core/Codebase/` + `Game/BuildPanel.cs` |
 | [DEMO_UI.md](DEMO_UI.md) | 执行可视化 Demo（开发期演示，非 Unity） | `DemoUI/` |
 | [PRESENTATION.md](PRESENTATION.md) | Unity 表现层（2D 俯视角视图/TickDriver） | `Assets/Scripts/Game/` |
 
@@ -103,8 +105,11 @@ ICombatWorld ←── FakeCombatWorld（单测）/ Unity 实现（表现层）
 | 语法块（代码形态） | `Block` | AST 语句节点 |
 | 语法块（物品形态） | `Fragment` | 掉落/背包条目，呼应"回收源代码片段"；掉落系统落地时建类 |
 | 拼装的函数 | `Routine` | 玩家/怪物/Boss 的程序统一叫 Routine |
-| 局外仓库 | `Codebase` | 仓库系统落地时建类 |
+| 局外仓库 | `Codebase` | `Core/Codebase/CodebaseState`，已落地（doc/CODEBASE.md） |
 | CPU 周期 | `Cycle` | `CpuBudget`、`CpuCost` |
+| 时间片（材料） | `TimeSlice` | `MaterialKind` 枚举；延长执行时间窗，见 doc/CODEX.md |
+| RAM（材料） | `Ram` | 同上；提升行数上限 |
+| 驱动块（材料） | `Driver` | 同上；技能树货币 |
 
 **禁用词**：`Cycle` 表示时间（专指 CPU 周期）、`Function` 表示玩家程序（已被 `IBuiltin` 占用）、
 `Script`（Unity 里指 MonoBehaviour）、`Token`（词法/代币歧义）、`Statement`（与 Block 重复）。
@@ -148,14 +153,18 @@ ICombatWorld ←── FakeCombatWorld（单测）/ Unity 实现（表现层）
 **步骤机**（Execute 迭代器，UI 逐句驱动 + 懒执行）、**SourcePrinter** 源码排版、
 **RoutineEditor 拼装编辑器**（插入/移动/删除 + 防呆）、
 **执行可视化 Demo**（DemoUI，含拖拽拼装）、
-**Unity 表现层**（2D 俯视角 + TickDriver + attack 发射子弹，团结引擎批处理编译验证通过）。
-测试：69 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics，待编辑器 Test Runner 首跑）。
+**Unity 表现层**（2D 俯视角 + TickDriver + attack 发射子弹，团结引擎批处理编译验证通过）、
+**怪物图鉴数据层**（Core/Loot：材料三件套 + EnemyTable.json 加载 + 同步测试）、
+**ESC 主菜单 + 怪物图鉴 UI**、**死亡弹窗 + 重新开始**（重开保留拼装结果）、
+**游戏主菜单**（启动进程→选图→开局 / 构建 / 图鉴 / 退出；词法树占位禁用）、
+**局外代码库**（Core/Codebase：语块阶梯 + 合成 + 材料余额，构建页 UI）。
+测试：110 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics，待编辑器 Test Runner 首跑）。
 
 **未实现**（按建议顺序）：
 
 1. 变量作用域（块级作用域，`static`/`const` 语义的地基）→ CODE_EXECUTION
 2. 词缀系统（装饰器 + 编译期烘焙）→ 新文档 AFFIX.md
-3. `Fragment` + 掉落表 → 新文档 FRAGMENT.md
+3. `Fragment` + 掉落表（含升级材料三件套与 Boss 专属语句，设计稿：根目录 `LootDesign.md`）→ 新文档 FRAGMENT.md
 4. 局内模拟器（固定 tick 循环 + 战斗状态机，灰盒 demo 核心）
 5. Unity 表现层（`TickDriver` + `ICombatWorld` 真实现）→ 新文档 PRESENTATION.md
 6. Routine 的 JSON 序列化（存档 / 仓库 / Boss 屏显）→ CODE_EXECUTION

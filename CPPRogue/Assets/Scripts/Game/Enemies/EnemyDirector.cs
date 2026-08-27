@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using CPPRogue.Core.Code;
 using CPPRogue.Core.Enemies;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,8 +23,11 @@ namespace CPPRogue.Game
         private Text _hpText;
         private bool _autoSpawn = true;
         private float _autoSpawnTimer = 3f;
-        private bool _deathLogged;
+        private bool _deathShown;
         private bool _showRanges = true;   // 技能判定圈（调平衡用，V 切换）
+        private RoutineEditor _editor;     // 重开时跨局保留的拼装结果
+        private Transform _viewsRoot;      // 怪物/子弹/特效视图都挂这下面，重开随 director 一起拆
+        private int _kills;                // 本局回收进程数（死亡弹窗统计用）
 
         private readonly Dictionary<int, EnemyView> _views = new Dictionary<int, EnemyView>();
         private readonly Dictionary<int, GameObject> _bulletViews = new Dictionary<int, GameObject>();
@@ -75,13 +79,17 @@ namespace CPPRogue.Game
                 Hud.Log("清场");
         }
 
-        public void Setup(PlayerController player, RoutineHud hud)
+        public void Setup(PlayerController player, RoutineHud hud, RoutineEditor editor)
         {
             Player = player;
             Hud = hud;
+            _editor = editor;
             _sim = new EnemySim(new EnemySimConfig(), seed: 42);
             Player.MaxHp = _sim.PlayerMaxHp;
             Player.Hp = _sim.PlayerHp;
+
+            _viewsRoot = new GameObject("Views").transform;
+            _viewsRoot.SetParent(transform, false);
 
             // 血量显示：挂在 HUD 同一 Canvas 左下角
             var hpRect = UiFactory.Rect("PlayerHp", hud.transform,
@@ -201,6 +209,7 @@ namespace CPPRogue.Game
                 if (!_views.TryGetValue(e.Id, out EnemyView view))
                 {
                     var go = new GameObject($"Enemy_{e.DisplayName}_{e.Id}");
+                    go.transform.SetParent(_viewsRoot, false);
                     view = go.AddComponent<EnemyView>();
                     view.Setup(e, EnemyVisuals.SkillRange(e.Kind, _sim.Config));
                     view.SetRangeVisible(_showRanges);
@@ -222,6 +231,7 @@ namespace CPPRogue.Game
                 {
                     Color color = EnemyVisuals.BulletColor(b);
                     go = new GameObject("Bullet");
+                    go.transform.SetParent(_viewsRoot, false);
                     var renderer = go.AddComponent<SpriteRenderer>();
                     renderer.sprite = EnemyVisuals.CircleSprite(color);
                     renderer.sortingOrder = 6;
@@ -286,12 +296,17 @@ namespace CPPRogue.Game
                     ? new Color(1f, 0.4f, 0.4f)
                     : new Color(0.9f, 0.95f, 1f);
             }
-            if (_sim.PlayerDead && !_deathLogged)
+            if (_sim.PlayerDead && !_deathShown)
             {
-                _deathLogged = true;
+                _deathShown = true;
+                GameRun.Over = true;
                 Player.Speed = 0f;
+                Time.timeScale = 0f;
                 if (Hud != null)
-                    Hud.Log("进程终止：未捕获的异常导致崩溃 —— 你死了（C 清场后可继续围观）");
+                    Hud.Log("进程终止：未捕获的异常导致崩溃 —— 你死了");
+                DeathPanel.Create(Hud != null ? Hud.transform : transform, _sim.Time, _kills,
+                    onRestart: () => GameBootstrap.Restart(_editor),
+                    onSpectate: () => Time.timeScale = 1f);
             }
         }
 
@@ -313,6 +328,7 @@ namespace CPPRogue.Game
                 switch (ev.Type)
                 {
                     case SimEventType.EnemyDied:
+                        _kills++;
                         if (ev.Kind == EnemyKind.NullPointer && Hud != null)
                             Hud.Log("Segmentation fault (core dumped)");   // 表现层彩蛋 §3
                         break;
@@ -339,6 +355,7 @@ namespace CPPRogue.Game
         private IEnumerator ExplosionFx(Vector3 pos, float radius)
         {
             var go = new GameObject("Blast");
+            go.transform.SetParent(_viewsRoot, false);
             var renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = EnemyVisuals.CircleSprite(new Color(1f, 0.75f, 0.3f));
             renderer.sortingOrder = 7;
