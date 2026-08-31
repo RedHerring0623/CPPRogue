@@ -30,10 +30,11 @@ CodexPanel（图鉴 UI，只读展示）
 | `MaterialKind.cs` | 材料三件套枚举（TimeSlice/Ram/Driver）+ 稳定 ID、展示名、效果文案 |
 | `CodexEntry.cs` | 图鉴条目（id/中英名/档位/属性等级/积分/主材料/描述）+ `CodexTier`（Normal/Elite/Minion） |
 | `EnemyCodex.cs` | 内置镜像表 `Default()`；`KindForId`/`IdForKind`（图鉴 ↔ EnemyKind 的唯一连接点）；`TierRule` 档位掉落规则文案 |
-| `MiniJson.cs` | 极简 JSON 解析器（对象/数组/字符串/数字/布尔/null）。为什么手写：Core 不引第三方库（netstandard2.1），JsonUtility 不支持字典 |
+| `DropRoller.cs` | 掉落掷骰（35% / 必掉 2，见 doc/EXTRACTION.md） |
+| `MiniJson.cs` | 极简 JSON 解析器（对象/数组/字符串/数字/布尔/null）+ `Write` 写入器（存档用）。为什么手写：Core 不引第三方库（netstandard2.1），JsonUtility 不支持字典 |
 | `EnemyCodexJson.cs` | EnemyTable.json → `CodexBook`；格式错误抛 FormatException（带条目定位） |
 
-图鉴**只报属性等级**（hp2/atk1/spd2）；等级 → 数值的换算归 StatTable，图鉴不参与战斗。
+图鉴**直接驱动战斗数值**（2026-08-31 改版）：stats 的 hp/atk 是直值（bug 的 hp2 就是 2 点生命，atk1 打玩家一下扣 1 血），spd 仍是等级（1-5 → StatTable）。运行时 EnemyDirector 把图鉴数值构建成 `EnemyStatOverride` 覆盖表注入 EnemySim——**改 JSON 的 hp/atk 即刻影响战斗**。
 
 ## 3. 图鉴 UI（Game 层）
 
@@ -46,10 +47,11 @@ CodexPanel（图鉴 UI，只读展示）
 
 ## 4. 调参流程（改表必须看）
 
-1. 改 `Assets/Resources/EnemyTable.json`；
-2. **同步改 `EnemyCodex.Default()`**（同步测试盯着）；
-3. 属性等级 / 出怪积分的源头仍是 EnemyDesign.md，行为数值源头仍是 StatTable/EnemySimConfig；
-4. `dotnet test` 跑绿。
+1. 改 `Assets/Resources/EnemyTable.json`（hp/atk 直值、spd 等级、掉落、描述）；
+2. **同步改 `EnemyCodex.Default()`**（同步测试盯着，谁改了没同步立刻红）；
+3. 原型表 `EnemyArchetypes` 的内置数值是 JSON 缺失时的兜底，调参时顺手对齐；
+4. 行为时序参数（引信、读条、击退……）与玩家血量仍只在 `EnemySimConfig`（当前 10，与直值同量级）；
+5. `dotnet test` 跑绿。
 
 ## 5. 测试
 

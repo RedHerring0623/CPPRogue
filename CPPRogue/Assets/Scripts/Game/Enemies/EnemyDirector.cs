@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using CPPRogue.Core.Code;
 using CPPRogue.Core.Enemies;
+using CPPRogue.Core.Loot;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,6 +29,15 @@ namespace CPPRogue.Game
         private RoutineEditor _editor;     // 重开时跨局保留的拼装结果
         private Transform _viewsRoot;      // 怪物/子弹/特效视图都挂这下面，重开随 director 一起拆
         private int _kills;                // 本局回收进程数（死亡弹窗统计用）
+
+        // —— 掉落与背包（LootDesign.md §4：撤离入库，死亡全清）——
+        private readonly System.Random _dropRng = new System.Random(20260831);
+        private readonly List<Pickup> _pickups = new List<Pickup>();
+        private readonly Dictionary<MaterialKind, int> _bag = new Dictionary<MaterialKind, int>();
+
+        // —— 玩家状态可视化 ——
+        private SpriteRenderer _shieldRing;
+        private float _healFlash;
 
         private readonly Dictionary<int, EnemyView> _views = new Dictionary<int, EnemyView>();
         private readonly Dictionary<int, GameObject> _bulletViews = new Dictionary<int, GameObject>();
@@ -84,12 +94,23 @@ namespace CPPRogue.Game
             Player = player;
             Hud = hud;
             _editor = editor;
-            _sim = new EnemySim(new EnemySimConfig(), seed: 42);
+            // 图鉴直值覆盖（2026-08-31 改版）：hp/atk 直接用 EnemyTable.json 的数字，改表即生效
+            _sim = new EnemySim(new EnemySimConfig(), seed: 42, CodexData.BuildStatOverrides());
             Player.MaxHp = _sim.PlayerMaxHp;
             Player.Hp = _sim.PlayerHp;
 
             _viewsRoot = new GameObject("Views").transform;
             _viewsRoot.SetParent(transform, false);
+
+            // 护盾可视化：主角外圈的半透明青环（有盾才显示）
+            var ringGo = new GameObject("ShieldRing");
+            ringGo.transform.SetParent(Player.transform, false);
+            var ring = ringGo.AddComponent<SpriteRenderer>();
+            ring.sprite = SpriteFactory.CreateCircle(96, new Color(0.55f, 0.9f, 1f, 0.4f));
+            ring.sortingOrder = 9;
+            ringGo.transform.localScale = new Vector3(1.7f, 1.7f, 1f);
+            ringGo.SetActive(false);
+            _shieldRing = ring;
 
             // 血量显示：挂在 HUD 同一 Canvas 左下角
             var hpRect = UiFactory.Rect("PlayerHp", hud.transform,
@@ -123,6 +144,39 @@ namespace CPPRogue.Game
         {
             if (_sim != null)
                 _sim.HealPlayer(amount);
+            _healFlash = 0.6f;   // HP 数字短暂变绿
+        }
+
+        /// <summary>shield() 的落地：护盾由 sim 结算（先于血量吸收）。</summary>
+        public void ShieldPlayer(float amount)
+        {
+            if (_sim != null)
+                _sim.ShieldPlayer(amount);
+        }
+
+        /// <summary>tick 开始：清空"持续 1 tick"的护盾（TickDriver 经 CombatWorldBridge 调用）。</summary>
+        public void BeginTick()
+        {
+            if (_sim != null)
+                _sim.ClearPlayerShield();
+        }
+
+        /// <summary>执行超窗的惩罚伤害：穿盾穿无敌帧（LootDesign.md §1）。</summary>
+        public void TimeoutPunish(float maxHpFraction)
+        {
+            if (_sim != null)
+                _sim.TimeoutPunishDamage(maxHpFraction);
+        }
+
+        /// <summary>局内背包（撤离结算入库用；死亡即清——本对象随局一起拆）。</summary>
+        public IReadOnlyDictionary<MaterialKind, int> Bag => _bag;
+
+        /// <summary>撤离入库：背包材料写进局外档案并落盘。</summary>
+        public void BankBag()
+        {
+            foreach (KeyValuePair<MaterialKind, int> pair in _bag)
+                MainMenu.Profile.Codebase.AddMaterial(pair.Key, pair.Value);
+            SaveFile.Save(MainMenu.Profile);
         }
 
         private void Update()
@@ -144,6 +198,7 @@ namespace CPPRogue.Game
 
             SyncEnemies();
             SyncBullets();
+            UpdatePickups(dt);
             SyncPlayerHud();
             HandleEvents();
         }
@@ -291,10 +346,27 @@ namespace CPPRogue.Game
             Player.Hp = _sim.PlayerHp;
             if (_hpText != null)
             {
-                _hpText.text = $"HP {_sim.PlayerHp:0}/{_sim.PlayerMaxHp:0}    敌人 {AliveCount()}    x={_sim.Config.X:0.00}";
-                _hpText.color = _sim.PlayerHp <= _sim.PlayerMaxHp * 0.3f
-                    ? new Color(1f, 0.4f, 0.4f)
-                    : new Color(0.9f, 0.95f, 1f);
+                string shield = _sim.PlayerShield > 0f ? $" +盾{_sim.PlayerShield:0.#}" : "";
+                _hpText.text = $"HP {_sim.PlayerHp:0}/{_sim.PlayerMaxHp:0}{shield}    敌人 {AliveCount()}    背包 {BagText()}";
+                _hpText.color = _healFlash > 0f
+                    ? new Color(0.5f, 1f, 0.6f)
+                    : _sim.PlayerHp <= _sim.PlayerMaxHp * 0.3f
+                        ? new Color(1f, 0.4f, 0.4f)
+                        : new Color(0.9f, 0.95f, 1f);
+            }
+            if (_healFlash > 0f)
+                _healFlash -= Time.deltaTime;
+
+            // 护盾环：有盾显示，盾越厚环越大
+            if (_shieldRing != null)
+            {
+                bool hasShield = _sim.PlayerShield > 0f;
+                _shieldRing.gameObject.SetActive(hasShield);
+                if (hasShield)
+                {
+                    float scale = 1.7f + Mathf.Min(_sim.PlayerShield, 60f) * 0.008f;
+                    _shieldRing.transform.localScale = new Vector3(scale, scale, 1f);
+                }
             }
             if (_sim.PlayerDead && !_deathShown)
             {
@@ -319,6 +391,59 @@ namespace CPPRogue.Game
             return n;
         }
 
+        // —— 掉落与背包 ——
+
+        /// <summary>按图鉴档位掷骰掉落（LootDesign.md §4），在尸体位置生成材料球。</summary>
+        private void RollDrops(EnemyKind kind, Vec2 position)
+        {
+            if (!CodexData.TryGet(kind, out CodexTier tier, out MaterialKind main))
+                return;
+            foreach (MaterialKind material in DropRoller.Roll(tier, main, _dropRng))
+            {
+                var go = new GameObject($"Pickup_{material}");
+                go.transform.SetParent(_viewsRoot, false);
+                var pickup = go.AddComponent<Pickup>();
+                pickup.Setup(position, material);
+                _pickups.Add(pickup);
+            }
+        }
+
+        private void UpdatePickups(float dt)
+        {
+            Vec2 player = ToVec2(Player.transform.position);
+            for (int i = _pickups.Count - 1; i >= 0; i--)
+            {
+                Pickup pickup = _pickups[i];
+                if (pickup == null)
+                {
+                    _pickups.RemoveAt(i);
+                    continue;
+                }
+                pickup.TickAnimation(dt);
+                if (GameRun.Over || Vec2.Distance(pickup.Position, player) <= 1f)
+                {
+                    if (!GameRun.Over)
+                    {
+                        _bag.TryGetValue(pickup.Kind, out int n);
+                        _bag[pickup.Kind] = n + 1;
+                        if (Hud != null)
+                            Hud.Log($"拾取 {Materials.Name(pickup.Kind)}（背包 {BagText()}）");
+                    }
+                    Destroy(pickup.gameObject);
+                    _pickups.RemoveAt(i);
+                }
+            }
+        }
+
+        private string BagText()
+        {
+            var parts = new List<string>();
+            if (_bag.TryGetValue(MaterialKind.TimeSlice, out int ts) && ts > 0) parts.Add($"片×{ts}");
+            if (_bag.TryGetValue(MaterialKind.Ram, out int ram) && ram > 0) parts.Add($"RAM×{ram}");
+            if (_bag.TryGetValue(MaterialKind.Driver, out int dr) && dr > 0) parts.Add($"驱×{dr}");
+            return parts.Count > 0 ? string.Join(" ", parts) : "空";
+        }
+
         // —— 事件消费 ——
 
         private void HandleEvents()
@@ -329,8 +454,14 @@ namespace CPPRogue.Game
                 {
                     case SimEventType.EnemyDied:
                         _kills++;
+                        RollDrops(ev.Kind, ev.Position);
                         if (ev.Kind == EnemyKind.NullPointer && Hud != null)
                             Hud.Log("Segmentation fault (core dumped)");   // 表现层彩蛋 §3
+                        break;
+
+                    case SimEventType.ShieldAbsorbed:
+                        if (Hud != null)
+                            Hud.Log($"护盾吸收 {ev.Amount:0.#}");
                         break;
 
                     case SimEventType.Exploded:

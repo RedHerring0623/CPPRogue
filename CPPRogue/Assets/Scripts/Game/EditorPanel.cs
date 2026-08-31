@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using CPPRogue.Core.Code;
 using CPPRogue.Core.Code.Ast;
@@ -7,22 +8,47 @@ using UnityEngine.UI;
 
 namespace CPPRogue.Game
 {
+    /// <summary>编辑面板的可配置项：正常 BD（仓库语块 + 校验 + 落盘）与测试 BD（全语句自由）共用这块 UI。</summary>
+    public sealed class EditorPanelOptions
+    {
+        public string Title = "已暂停 —— 拼装你的 Routine（按 ESC 继续）";
+        public string Hint = "左键拖动 = 插入/移动　　右键点击 = 删除　　双击 = 改参数　　ESC = 继续游戏";
+
+        /// <summary>可拖入的语块清单；null = GamePalette 全部语句（测试 BD）。</summary>
+        public IList<PaletteEntry> Palette;
+
+        /// <summary>插入校验（正常 BD：语块用量 ≤ 仓库持有）；null = 不限。</summary>
+        public Func<Block, bool> CanInsert;
+
+        /// <summary>每次成功编辑（插入/移动/删除）后的回调（正常 BD 落盘用）。</summary>
+        public Action Changed;
+
+        /// <summary>false = 嵌入构建页，不压暗全屏。</summary>
+        public bool Dim = true;
+
+        /// <summary>代码拼装区宽度（默认 600；嵌入构建页的宽区域可加大）。</summary>
+        public float CodeWidth = 600f;
+    }
+
     /// <summary>
-    /// 暂停时的拼装编辑面板（DemoUI 拖拽编辑的 Unity 版）：
+    /// 拼装编辑面板（DemoUI 拖拽编辑的 Unity 版）：
     /// 左侧语法块面板拖入右侧代码缝隙；已有行拖动换位；右键删除；双击改参数。
-    /// 所有编辑操作走 Core 的 RoutineEditor（防呆：行数上限 / 子树规则）。
+    /// 所有编辑操作走 Core 的 RoutineEditor（防呆：行数上限 / 子树规则）；
+    /// 正常 BD（仓库语块受限 + 落盘）与测试 BD（全语句）靠 EditorPanelOptions 区分。
     /// </summary>
     public sealed class EditorPanel : MonoBehaviour
     {
         private const float LineHeight = 26f;
         private const float GapHeight = 12f;
-        private const float CodeWidth = 600f;
 
         private RoutineEditor _editor;
+        private EditorPanelOptions _options;
         private RectTransform _canvasRect;
         private RectTransform _codeArea;
         private Text _countLabel;
         private Text _feedback;
+
+        public RoutineEditor Editor => _editor;
 
         private readonly List<GapRow> _gaps = new List<GapRow>();
 
@@ -31,6 +57,16 @@ namespace CPPRogue.Game
             public Slot Slot;
             public Image Bg;
         }
+
+        private struct PaletteRow
+        {
+            public PaletteEntry Entry;
+            public Image Bg;
+            public Text Label;
+            public PaletteDrag Drag;
+        }
+
+        private readonly List<PaletteRow> _paletteRows = new List<PaletteRow>();
 
         private struct DragState
         {
@@ -43,7 +79,7 @@ namespace CPPRogue.Game
         private DragState _drag;
         private float _y;
 
-        public static EditorPanel Create(RoutineEditor editor, Transform canvasTransform)
+        public static EditorPanel Create(RoutineEditor editor, Transform canvasTransform, EditorPanelOptions options = null)
         {
             var go = new GameObject("EditorPanel");
             var rect = go.AddComponent<RectTransform>();
@@ -52,10 +88,12 @@ namespace CPPRogue.Game
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
-            go.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.86f);
+            if (options == null || options.Dim)
+                go.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.86f);
 
             var panel = go.AddComponent<EditorPanel>();
             panel._editor = editor;
+            panel._options = options ?? new EditorPanelOptions();
             panel._canvasRect = (RectTransform)canvasTransform;
             panel.Build();
             return panel;
@@ -65,29 +103,30 @@ namespace CPPRogue.Game
         {
             var titleRect = UiFactory.Rect("Title", transform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(1200, 30));
-            UiFactory.Label(titleRect, "已暂停 —— 拼装你的 Routine（按 ESC 继续）",
-                UiFonts.Text, 22, new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
+            UiFactory.Label(titleRect, _options.Title, UiFonts.Text, 22, new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
 
-            // 左：语法块面板
+            // 左：语法块面板（590 高 = 容纳 18 种语块条目且不压底部提示行；26/32 行距）
             var paletteRect = UiFactory.Rect("Palette", transform,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -64f), new Vector2(310, 640));
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -64f), new Vector2(310, 590));
             paletteRect.gameObject.AddComponent<Image>().color = new Color(0.15f, 0.15f, 0.17f, 0.95f);
             float y = -6f;
-            foreach (PaletteEntry entry in GamePalette.Items)
+            IList<PaletteEntry> palette = _options.Palette ?? GamePalette.Items;
+            foreach (PaletteEntry entry in palette)
             {
                 var rowRect = UiFactory.Rect("Item", paletteRect,
-                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(6f, y), new Vector2(298, 32));
-                rowRect.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.22f, 0.27f);
-                UiFactory.Label(rowRect, entry.Title, UiFonts.Code, 15, new Color(0.85f, 0.88f, 0.95f));
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(6f, y), new Vector2(298, 26));
+                Image rowBg = rowRect.gameObject.AddComponent<Image>();
+                Text rowLabel = UiFactory.Label(rowRect, entry.Title, UiFonts.Code, 14, new Color(0.85f, 0.88f, 0.95f));
                 var drag = rowRect.gameObject.AddComponent<PaletteDrag>();
                 drag.Panel = this;
                 drag.Entry = entry;
-                y -= 38f;
+                _paletteRows.Add(new PaletteRow { Entry = entry, Bg = rowBg, Label = rowLabel, Drag = drag });
+                y -= 32f;
             }
 
             // 右：代码拼装区
             var codeRect = UiFactory.Rect("Code", transform,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(360f, -64f), new Vector2(CodeWidth + 20, 640));
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(360f, -64f), new Vector2(_options.CodeWidth + 20f, 590));
             codeRect.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.10f, 0.11f, 0.97f);
             _codeArea = codeRect;
 
@@ -101,11 +140,28 @@ namespace CPPRogue.Game
 
             // 底部操作提示
             var hintRect = UiFactory.Rect("Hint", transform,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(1200, 26));
-            UiFactory.Label(hintRect, "左键拖动 = 插入/移动　　右键点击 = 删除　　双击 = 改参数　　ESC = 继续游戏",
-                UiFonts.Text, 16, new Color(0.65f, 0.65f, 0.7f), TextAnchor.MiddleCenter);
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(1200, 22));
+            UiFactory.Label(hintRect, _options.Hint, UiFonts.Text, 14,
+                new Color(0.65f, 0.65f, 0.7f), TextAnchor.MiddleCenter);
 
+            RefreshPalette();
             RefreshCode();
+        }
+
+        /// <summary>正常 BD：条目标注剩余数（持有 − 已用，随插入/删除实时变化）；×0 灰化禁拖。</summary>
+        private void RefreshPalette()
+        {
+            foreach (PaletteRow row in _paletteRows)
+            {
+                if (row.Entry.Remaining == null)
+                    continue;
+                int left = row.Entry.Remaining().GetValueOrDefault();
+                row.Label.text = $"{row.Entry.Title}  ×{left}";
+                bool usable = left > 0;
+                row.Bg.color = usable ? new Color(0.20f, 0.22f, 0.27f) : new Color(0.13f, 0.14f, 0.16f);
+                row.Label.color = usable ? new Color(0.85f, 0.88f, 0.95f) : new Color(0.42f, 0.44f, 0.48f);
+                row.Drag.enabled = usable;
+            }
         }
 
         // ---------- 代码区渲染（行 + 缝隙） ----------
@@ -122,6 +178,7 @@ namespace CPPRogue.Game
             _y = -6f;
             RenderBody(_editor.Root, null, 0, 0);
             _countLabel.text = $"行数 {_editor.StatementCount}/{_editor.MaxLines}";
+            RefreshPalette();
         }
 
         private void RenderBody(Block[] body, Block owner, int branch, int depth)
@@ -163,7 +220,7 @@ namespace CPPRogue.Game
         private void AddGap(Slot slot, int depth)
         {
             RectTransform rect = UiFactory.Rect("Gap", _codeArea,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, _y), new Vector2(CodeWidth - 46, GapHeight - 2f));
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, _y), new Vector2(_options.CodeWidth - 46f, GapHeight - 2f));
             _y -= GapHeight;
             Image bg = rect.gameObject.AddComponent<Image>();
             bg.color = CodeColors.GapIdle;
@@ -176,7 +233,7 @@ namespace CPPRogue.Game
         {
             string indent = new string(' ', depth * 4);
             RectTransform rect = UiFactory.Rect("Line", _codeArea,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, _y), new Vector2(CodeWidth - 46, LineHeight - 2f));
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, _y), new Vector2(_options.CodeWidth - 46f, LineHeight - 2f));
             _y -= LineHeight;
             rect.gameObject.AddComponent<Image>().color = new Color(0.14f, 0.14f, 0.16f, 0.9f);
             UiFactory.Label(rect, $"{indent}{text}", UiFonts.Code, 15, CodeColors.BaseText(statement));
@@ -202,8 +259,12 @@ namespace CPPRogue.Game
             if (_drag.Ghost != null)
                 Destroy(_drag.Ghost.gameObject);
 
+            // anchor/pivot 对齐父 rect 的 pivot：ScreenPointToLocal 的局部原点在父 pivot，
+            // 这样 anchoredPosition 才能和鼠标局部坐标同一原点（父是左上 pivot 的嵌入区时才不会飘走）
             var ghost = UiFactory.Rect("Ghost", _canvasRect,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(260, 30));
+                new Vector2(_canvasRect.pivot.x, _canvasRect.pivot.y),
+                new Vector2(_canvasRect.pivot.x, _canvasRect.pivot.y),
+                Vector2.zero, new Vector2(260, 30));
             Image img = ghost.gameObject.AddComponent<Image>();
             img.color = new Color(0.16f, 0.45f, 0.7f, 0.9f);
             img.raycastTarget = false;
@@ -218,7 +279,7 @@ namespace CPPRogue.Game
             if (_drag.Ghost == null)
                 return;
             if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRect, e.position, e.pressEventCamera, out Vector2 local))
-                _drag.Ghost.anchoredPosition = local;
+                _drag.Ghost.anchoredPosition = local + new Vector2(14f, -14f);   // 跟标显示在鼠标右下角
             RecolorGaps(e);
         }
 
@@ -236,6 +297,7 @@ namespace CPPRogue.Game
                             _editor.Move(_drag.Source.Value, zone.Slot);
                             RefreshCode();
                             Feedback($"已移动：{_drag.Title}");
+                            NotifyChanged();
                         }
                         else
                         {
@@ -244,15 +306,22 @@ namespace CPPRogue.Game
                     }
                     else
                     {
-                        if (_editor.CanInsert(zone.Slot, _drag.NewBlock))
+                        bool fits = _editor.CanInsert(zone.Slot, _drag.NewBlock);
+                        bool allowed = fits && CanUse(_drag.NewBlock);
+                        if (allowed)
                         {
                             _editor.Insert(zone.Slot, _drag.NewBlock);
                             RefreshCode();
                             Feedback($"已插入：{_drag.Title}");
+                            NotifyChanged();
+                        }
+                        else if (!fits)
+                        {
+                            Feedback("放不下：超过行数上限");
                         }
                         else
                         {
-                            Feedback("放不下：超过行数上限");
+                            Feedback("正常 BD 限制：语块用量超过仓库持有，或该语句不在仓库中");
                         }
                     }
                 }
@@ -264,6 +333,18 @@ namespace CPPRogue.Game
                 _drag = default(DragState);
                 ResetGapColors();
             }
+        }
+
+        /// <summary>插入校验钩子（正常 BD 用）；测试 BD（无钩子）恒通过。</summary>
+        private bool CanUse(Block block)
+        {
+            return _options.CanInsert == null || _options.CanInsert(block);
+        }
+
+        private void NotifyChanged()
+        {
+            if (_options.Changed != null)
+                _options.Changed();
         }
 
         private void RecolorGaps(PointerEventData e)
@@ -280,7 +361,7 @@ namespace CPPRogue.Game
                 {
                     bool ok = _drag.Source.HasValue
                         ? _editor.CanMove(_drag.Source.Value, gap.Slot)
-                        : _editor.CanInsert(gap.Slot, _drag.NewBlock);
+                        : _editor.CanInsert(gap.Slot, _drag.NewBlock) && CanUse(_drag.NewBlock);
                     gap.Bg.color = ok ? CodeColors.GapOk : CodeColors.GapBad;
                 }
             }
@@ -319,6 +400,7 @@ namespace CPPRogue.Game
                 _editor.Remove(slot);
                 RefreshCode();
                 Feedback("已删除语句（含其子语句）");
+                NotifyChanged();
             }
         }
 

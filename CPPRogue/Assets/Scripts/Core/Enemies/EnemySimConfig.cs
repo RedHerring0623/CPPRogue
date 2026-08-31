@@ -9,7 +9,7 @@ namespace CPPRogue.Core.Enemies
     {
         // —— §0 全局规则 ——
         public float PlayerRadius = 0.5f;
-        public float PlayerMaxHp = 100f;
+        public float PlayerMaxHp = 10f;   // 2026-08-31 数值改版：与图鉴直值同量级（bug atk1 = 10% /次）
 
         /// <summary>碰撞结算：玩家受击后的全局无敌帧——唯一的受击间隔（§0）。</summary>
         public float PlayerInvulnTime = 0.1f;
@@ -44,14 +44,14 @@ namespace CPPRogue.Core.Enemies
         // —— 看门狗（§2.6）——
         public float WatchdogFuse = 10f;
         public float WatchdogBlastRadiusX = 3f;
-        public int WatchdogBlastAtkLv = 3;
+        public float WatchdogBlastAtk = 3f;         // 图鉴直值（原等级制 2026-08-31 改版）
 
         // —— 编译中（§2.7）——
         public float CompileTime = 5f;
         public float CompileDamageTakenMultiplier = 2f;
-        public int CompileRuntimeHpLv = 3;
-        public int CompileRuntimeAtkLv = 2;
-        public int CompileRuntimeSpdLv = 3;
+        public float CompileRuntimeHp = 3f;         // 图鉴直值
+        public float CompileRuntimeAtk = 2f;        // 图鉴直值
+        public int CompileRuntimeSpdLv = 3;         // spd 仍是等级
 
         // —— 过热（§2.8）——
         public float OverheatFastTime = 3f;

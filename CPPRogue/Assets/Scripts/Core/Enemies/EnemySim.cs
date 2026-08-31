@@ -18,14 +18,17 @@ namespace CPPRogue.Core.Enemies
         private readonly System.Random _rng;
         private int _nextId = 1;
 
-        public EnemySim(EnemySimConfig config, int seed = 0)
+        public EnemySim(EnemySimConfig config, int seed = 0,
+            System.Collections.Generic.IReadOnlyDictionary<EnemyKind, EnemyStatOverride> statOverrides = null)
         {
             Config = config;
             _rng = new System.Random(seed);
             PlayerHp = config.PlayerMaxHp;
+            StatOverrides = statOverrides;
         }
 
         public EnemySimConfig Config { get; }
+        public System.Collections.Generic.IReadOnlyDictionary<EnemyKind, EnemyStatOverride> StatOverrides { get; }
         public float Time { get; private set; }
         public IReadOnlyList<Enemy> Enemies => _enemies;
         public IReadOnlyList<SimBullet> Bullets => _bullets;
@@ -36,6 +39,9 @@ namespace CPPRogue.Core.Enemies
         public float PlayerMaxHp => Config.PlayerMaxHp;
         public bool PlayerDead => PlayerHp <= 0f;
         public float PlayerInvuln { get; private set; }
+
+        /// <summary>当前护盾值（shield(n) 叠加；由驱动层在每个 tick 开始时清空——"持续 1 tick"）。</summary>
+        public float PlayerShield { get; private set; }
 
         /// <summary>
         /// 玩家当前击退速度（方向 + 大小，单位/秒）。碰撞结算时产生，随后线性衰减到零；
@@ -56,11 +62,38 @@ namespace CPPRogue.Core.Enemies
             PlayerHp = System.Math.Min(PlayerMaxHp, PlayerHp + amount);
         }
 
+        /// <summary>shield(n)：叠加护盾。先于血量吸收伤害，被完全吸收的攻击不触发无敌帧。</summary>
+        public void ShieldPlayer(float amount)
+        {
+            if (PlayerDead || amount <= 0f)
+                return;
+            PlayerShield += amount;
+        }
+
+        /// <summary>tick 开始时清空护盾（持续 1 tick 的语义，由驱动层调用）。</summary>
+        public void ClearPlayerShield()
+        {
+            PlayerShield = 0f;
+        }
+
+        /// <summary>
+        /// 执行超窗的惩罚伤害（LootDesign.md §1）：按最大生命百分比直接扣血，
+        /// 穿透护盾与无敌帧——堆护盾躲不掉超时惩罚。
+        /// </summary>
+        public void TimeoutPunishDamage(float maxHpFraction)
+        {
+            if (PlayerDead)
+                return;
+            float amount = PlayerMaxHp * maxHpFraction;
+            PlayerHp = System.Math.Max(0f, PlayerHp - amount);
+            _events.Add(new SimEvent { Type = SimEventType.PlayerHit, Position = PlayerPosition, Amount = amount });
+        }
+
         // —— 出怪 ——
 
         public Enemy Spawn(EnemyKind kind, Vec2 position, int generation = 0)
         {
-            Enemy e = EnemyArchetypes.Create(kind, position, generation, _rng, Config);
+            Enemy e = EnemyArchetypes.Create(kind, position, generation, _rng, Config, StatOverrides);
             e.Id = _nextId++;
             _enemies.Add(e);
             Publish(SimEvent.FromEnemy(SimEventType.EnemySpawned, e));
@@ -202,6 +235,18 @@ namespace CPPRogue.Core.Enemies
         {
             if (PlayerDead)
                 return;
+
+            // 护盾先吸收：完全吸收则不掉血、不给无敌帧（盾还没破）
+            if (PlayerShield > 0f)
+            {
+                float absorbed = System.Math.Min(PlayerShield, amount);
+                PlayerShield -= absorbed;
+                amount -= absorbed;
+                _events.Add(new SimEvent { Type = SimEventType.ShieldAbsorbed, Position = PlayerPosition, Amount = absorbed });
+                if (amount <= 0f)
+                    return;
+            }
+
             PlayerHp = System.Math.Max(0f, PlayerHp - amount);
             PlayerInvuln = Config.PlayerInvulnTime;
             _events.Add(new SimEvent { Type = SimEventType.PlayerHit, Position = PlayerPosition, Amount = amount });

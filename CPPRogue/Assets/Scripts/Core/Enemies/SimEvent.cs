@@ -15,6 +15,9 @@ namespace CPPRogue.Core.Enemies
         ChildrenReaped,
 
         PlayerHit,
+
+        /// <summary>护盾吸收了伤害（UI 飘字/变盾条用）。</summary>
+        ShieldAbsorbed,
     }
 
     /// <summary>

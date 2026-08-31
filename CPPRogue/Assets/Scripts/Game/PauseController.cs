@@ -6,26 +6,31 @@ using UnityEngine.UI;
 namespace CPPRogue.Game
 {
     /// <summary>
-    /// ESC 暂停入口。第一次 ESC 弹出主菜单（继续 / 编辑 Routine / 怪物图鉴）；
-    /// 编辑器或图鉴打开时再按 ESC = 关闭面板并继续（沿用拼装面板"ESC = 继续游戏"的旧约）。
-    /// 局已结束（GameRun.Over，死亡弹窗在场）时 ESC 失效——重开入口在死亡弹窗上。
-    /// 继续时用编辑结果热替换 Routine（变量黑板保留，tick 从头开始）。
+    /// ESC 暂停入口。第一次 ESC 弹出主菜单；编辑器或图鉴打开时再按 ESC = 关闭并继续。
+    /// 测试地图有**两套 BD**：
+    /// - 正常 BD：只能用仓库语块（用量 ≤ 持有），改动即时存档、热更新生效——正式地图也走这套；
+    /// - 测试 BD：全语句自由拼，不存档，随局消失——只有测试地图有。
+    /// 局已结束（GameRun.Over，死亡/撤离弹窗在场）时 ESC 失效。
     /// </summary>
     public sealed class PauseController : MonoBehaviour
     {
-        private RoutineEditor _editor;
+        private RoutineEditor _normalEditor;
+        private RoutineEditor _testEditor;      // null = 正式地图（只有正常 BD）
         private TickDriver _driver;
         private RoutineHud _hud;
         private RectTransform _menu;
         private RectTransform _confirm;
         private EditorPanel _editorPanel;
         private CodexPanel _codexPanel;
+        private RoutineEditor _active;          // 当前驱动运行 Routine 的 BD（默认正常 BD）
 
-        public void Setup(RoutineEditor editor, TickDriver driver, RoutineHud hud)
+        public void Setup(RoutineEditor normalEditor, RoutineEditor testEditor, TickDriver driver, RoutineHud hud)
         {
-            _editor = editor;
+            _normalEditor = normalEditor;
+            _testEditor = testEditor;
             _driver = driver;
             _hud = hud;
+            _active = normalEditor;
         }
 
         private void Update()
@@ -62,7 +67,7 @@ namespace CPPRogue.Game
                 return;
             }
             Time.timeScale = 0f;
-            _menu = PauseMenu.Create(this, transform);
+            _menu = PauseMenu.Create(this, transform, _testEditor != null);
         }
 
         // —— 主菜单按钮回调 ——
@@ -73,10 +78,36 @@ namespace CPPRogue.Game
             Resume();
         }
 
-        public void OpenEditorFromMenu()
+        public void OpenNormalEditor()
         {
             CloseMenu();
-            _editorPanel = EditorPanel.Create(_editor, transform);
+            _active = _normalEditor;
+            _editorPanel = EditorPanel.Create(_normalEditor, transform, new EditorPanelOptions
+            {
+                Title = "正常 BD —— 只能用仓库语块（改动即时存档）",
+                Palette = FragmentPalette.Build(MainMenu.Profile.Codebase, _normalEditor),
+                CanInsert = FragmentPalette.BuildCanInsert(MainMenu.Profile.Codebase, _normalEditor),
+                Changed = PersistNormalBd,
+            });
+        }
+
+        public void OpenTestEditor()
+        {
+            CloseMenu();
+            _active = _testEditor;
+            _editorPanel = EditorPanel.Create(_testEditor, transform, new EditorPanelOptions
+            {
+                Title = "测试 BD —— 全语句自由拼（不存档，随局消失）",
+            });
+        }
+
+        /// <summary>正常 BD 落盘（热更新）：每次编辑后校验并写回档案。</summary>
+        private void PersistNormalBd()
+        {
+            if (FragmentPalette.Persist(_normalEditor, MainMenu.Profile, out string error))
+                return;
+            if (_hud != null)
+                _hud.Log($"正常 BD 未存档：{error}");
         }
 
         public void OpenCodexFromMenu()
@@ -101,7 +132,7 @@ namespace CPPRogue.Game
         public void CancelQuit()
         {
             CloseConfirm();
-            _menu = PauseMenu.Create(this, transform);   // 回到暂停菜单
+            _menu = PauseMenu.Create(this, transform, _testEditor != null);   // 回到暂停菜单
         }
 
         private void CloseCodexAndResume()
@@ -113,7 +144,7 @@ namespace CPPRogue.Game
         private void Resume()
         {
             Time.timeScale = 1f;
-            Routine routine = _editor.BuildRoutine();
+            Routine routine = _active.BuildRoutine();
             _driver.ReplaceRoutine(routine);
             _hud.Rebuild(routine);
         }
@@ -155,10 +186,10 @@ namespace CPPRogue.Game
         }
     }
 
-    /// <summary>ESC 主菜单：全屏压暗 + 居中卡片三按钮（继续 / 编辑 / 图鉴）。按钮全部挂在卡片下、自顶向下排。</summary>
+    /// <summary>ESC 主菜单：全屏压暗 + 居中卡片按钮（测试地图多一个"测试 BD"入口）。</summary>
     internal sealed class PauseMenu : MonoBehaviour
     {
-        public static RectTransform Create(PauseController owner, Transform canvasTransform)
+        public static RectTransform Create(PauseController owner, Transform canvasTransform, bool showTestEditor)
         {
             var go = new GameObject("PauseMenu");
             var rect = go.AddComponent<RectTransform>();
@@ -170,15 +201,16 @@ namespace CPPRogue.Game
             go.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.62f);
 
             var menu = go.AddComponent<PauseMenu>();
-            menu.Build(owner);
+            menu.Build(owner, showTestEditor);
             rect.SetAsLastSibling();   // 保证压在其它 UI 之上接收点击
             return rect;
         }
 
-        private void Build(PauseController owner)
+        private void Build(PauseController owner, bool showTestEditor)
         {
+            float boxHeight = showTestEditor ? 436f : 376f;
             var box = UiFactory.Rect("Box", transform,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(360, 376));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(360, boxHeight));
             box.gameObject.AddComponent<Image>().color = new Color(0.13f, 0.14f, 0.16f, 0.98f);
 
             var titleRect = UiFactory.Rect("Title", box,
@@ -187,10 +219,13 @@ namespace CPPRogue.Game
                 new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
 
             // 按钮挂在卡片下、以卡片顶边为基准向下排——不会跑出卡片，也不和提示文字重叠
-            MakeButton(box, "继续游戏", new Color(0.30f, 0.55f, 0.80f), -62f, owner.ContinueFromMenu);
-            MakeButton(box, "编辑 Routine", new Color(0.50f, 0.52f, 0.58f), -126f, owner.OpenEditorFromMenu);
-            MakeButton(box, "怪物图鉴", new Color(0.58f, 0.47f, 0.85f), -190f, owner.OpenCodexFromMenu);
-            MakeButton(box, "返回主菜单", new Color(0.45f, 0.30f, 0.30f), -254f, owner.AskQuitToMenu);
+            float y = -62f;
+            y = MakeButton(box, "继续游戏", new Color(0.30f, 0.55f, 0.80f), y, owner.ContinueFromMenu);
+            y = MakeButton(box, "编辑 BD · 正常", new Color(0.50f, 0.52f, 0.58f), y, owner.OpenNormalEditor);
+            if (showTestEditor)
+                y = MakeButton(box, "编辑 BD · 测试", new Color(0.46f, 0.42f, 0.55f), y, owner.OpenTestEditor);
+            y = MakeButton(box, "怪物图鉴", new Color(0.58f, 0.47f, 0.85f), y, owner.OpenCodexFromMenu);
+            MakeButton(box, "返回主菜单", new Color(0.45f, 0.30f, 0.30f), y, owner.AskQuitToMenu);
 
             var hintRect = UiFactory.Rect("Hint", box,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(340, 22));
@@ -198,11 +233,13 @@ namespace CPPRogue.Game
                 new Color(0.6f, 0.62f, 0.68f), TextAnchor.MiddleCenter);
         }
 
-        private void MakeButton(RectTransform parent, string label, Color tint, float y, Action action)
+        /// <summary>自顶向下排一个按钮，返回下一个按钮的 y。</summary>
+        private static float MakeButton(RectTransform parent, string label, Color tint, float y, Action action)
         {
             RectTransform rect = UiFactory.Rect(label, parent,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, y), new Vector2(290, 50));
             UiFactory.SolidButton(rect, label, tint, Color.black, UiFonts.Text, 17).onClick.AddListener(() => action());
+            return y - 64f;
         }
     }
 

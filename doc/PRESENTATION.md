@@ -13,14 +13,19 @@
 | `GameBootstrap` | 演示入口：`RuntimeInitializeOnLoadMethod` 在进 Play Mode 时先搭主菜单，选图后才搭局内世界（不改场景文件）。EventSystem 是会话级设施，永不随局拆除。正式场景就绪后移除，组件挂进场景 |
 | `MainMenu` | **主菜单**（启动后第一屏）：启动进程 / 构建 / 词法树（禁用占位）/ 怪物图鉴 / 退出进程；持有局外 CodebaseState（跨局、死亡不清） |
 | `MapSelectPanel` | 选择目标主机：当前只有"测试地图"卡片，点击即开局（`GameBootstrap.StartRun`） |
-| `BuildPanel` | **构建页**：仓库语块列表 + 合成台 + 材料余额（模型在 Core/Codebase，见 [CODEBASE.md](CODEBASE.md)） |
+| `BuildPanel` | **构建页（分页）**：战备 BD 页 = 拖拽拼装（仓库语块受限 + 即时存档）；升级/合成页 = 材料余额 + 行数/时间窗兑换 + 仓库 + 合成台（模型在 Core/Codebase，见 [CODEBASE.md](CODEBASE.md)） |
 | `PlayerController` | 主角 WASD/方向键走位（双手只负责移动，§2 核心循环），持 HP |
 | `CameraFollow` | 正交相机平滑跟随目标（帧率无关阻尼） |
-| `TickDriver` | 调度器（DemoUI 蓝本的正式版）：每 TickInterval 一个 tick，语句间 StatementInterval，下一 tick = max(固定间隔, 跑完时刻)；支持热替换 Routine |
+| `TickDriver` | 调度器 + **执行时间窗/三段惩罚**：窗内跑完 = max(固定间隔, 跑完时刻)；超窗 3s 宽限（移速→0 + 每秒 10% 最大生命穿盾扣）；宽限耗尽强杀 + 眩晕 3s。时间窗来自局外成长 |
+| `EnemyDirector` | 除视图同步外：怪死掉落掷骰（DropRoller）→ 材料球 → 拾取入背包；护盾环/heal 闪光/背包 HUD；`BankBag()` 撤离入库 |
+| `ExtractionPoint` / `ExtractionPanel` | **撤离点**：测试地图常态存在，主角外环常驻指引箭头；走近 2s 读条 → 入库落盘 → 结算弹窗（见 [EXTRACTION.md](EXTRACTION.md)） |
+| `Pickup` / `SaveFile` | 材料掉落球（三色浮动）/ 存档 IO（persistentDataPath/save.json，改动即时落盘） |
 | `RoutineHud` | **左上角源码逐行视图**：TickDriver 每步驱动高亮（黄=执行中 灰=优化掉 红=卡死），状态行显示 tick/周期 |
 | `CombatWorldBridge` | `ICombatWorld` 实现：`attack()` → 从主角发射随机方向子弹；heal/shield → 数值与 HUD |
 | `Bullet` | 直线飞行、超时消失；大小随伤害（视觉反馈）。命中判定待接 `CircleOverlap` |
-| `PauseController` + `PauseMenu` | **ESC 暂停**：弹出主菜单（继续游戏 / 编辑 Routine / 怪物图鉴 / 返回主菜单）；编辑器或图鉴打开时再按 ESC = 关闭并继续（热替换 Routine，变量保留） |
+| `PauseController` + `PauseMenu` | **ESC 暂停**：弹出主菜单（继续 / 编辑 BD·正常 / 编辑 BD·测试[仅测试地图] / 怪物图鉴 / 返回主菜单）；面板内再按 ESC = 关闭并继续（热替换 Routine，变量保留） |
+| `EditorPanel` + `EditorPanelOptions` | 拖拽拼装面板，双模式复用：**正常 BD**（面板=仓库语块，用量≤持有，改动即时存档热更新）/ **测试 BD**（全语句自由拼，不存档）；也可嵌入构建页（Dim=false） |
+| `FragmentPalette` | 正常 BD 三件套：语块面板构建 / 插入校验 / 落盘（校验→克隆→SaveFile），ESC 编辑与构建页共用 |
 | `ConfirmBox` | 返回主菜单的确认弹窗：「确认退回到主菜单吗？游戏内掉落不会保存！」确认 = 拆局回主菜单，取消/ESC = 回暂停菜单 |
 | `EditorPanel` | 拼装编辑面板（拖拽插入/移动、右键删除、双击改参数——DemoUI 的 Unity 版），从主菜单进入 |
 | `CodexPanel` | **怪物图鉴**：左列分组名单，右侧属性等级/掉落/描述；数据走 Core/Loot（见 [CODEX.md](CODEX.md)） |
@@ -30,12 +35,11 @@
 | `PlayerPropertySource` | `IPropertySource` 实现：`hp` 只读属性桥接 |
 
 **怎么跑**：团结引擎打开工程，任意场景按 Play。
-先停在**主菜单**：启动进程 → 选择目标主机 → 点"测试地图"卡片进入战斗。
-预期画面：深色背景、青色圆圈主角（WASD 移动、视角锁定）、每 3 秒一个 tick——
-先连发 3 颗随机方向子弹（每颗间隔 0.2s）再补 1 颗；**左上角源码视图黄色高亮逐句跳动**。
-**按 ESC**：主菜单（继续 / 编辑 Routine / 怪物图鉴 / 返回主菜单），编辑器/图鉴内再按 ESC 直接继续；
-**返回主菜单**：确认弹窗提示"游戏内掉落不会保存！"，确认后拆局回主菜单（局外数据保留）。
-**死亡**：弹窗显示死因与统计——重新开始（全拆重建，拼装结果保留）或继续围观（世界恢复运转）。
+先停在**主菜单**（存档自动载入，新档 = 一条 attack(1)）：启动进程 → 选择目标主机 → 点"测试地图"卡片进入战斗。
+战斗：WASD 走位，每 3 秒一个 tick 执行你的代码（左上角源码逐句高亮）；**杀怪掉材料球 → 走近拾取 → 沿主角外环的绿色箭头跑到撤离点站稳 2s → 撤离入库回主菜单**；死亡则本局背包全清。
+**按 ESC**：主菜单（继续 / 编辑 Routine / 怪物图鉴 / 返回主菜单），编辑器/图鉴内再按 ESC 直接继续。
+**死亡**：弹窗显示死因与统计——重新开始（拼装结果保留）或继续围观。
+**超窗**：代码 1s（+兑换）内没跑完 → 减速掉血 → 强杀眩晕 3s，见 doc/EXTRACTION.md。
 
 ## 2. 分层规则（与 Core 的边界）
 

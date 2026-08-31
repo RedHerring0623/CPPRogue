@@ -41,6 +41,17 @@ namespace CPPRogue.Core.Codebase
             _materials[kind] = CountMaterial(kind) + amount;
         }
 
+        /// <summary>花费材料（兑换成长等）。不足返回 false，不部分扣除。</summary>
+        public bool Spend(MaterialKind kind, int amount)
+        {
+            if (amount < 0)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+            if (CountMaterial(kind) < amount)
+                return false;
+            _materials[kind] = CountMaterial(kind) - amount;
+            return true;
+        }
+
         // —— 合成（LootDesign.md §3：两块同级 → 一块升一档）——
 
         /// <summary>合成目标 ID：2×tier →（tier == 顶档 ? 自由形参 : tier+1）。</summary>
@@ -68,19 +79,6 @@ namespace CPPRogue.Core.Codebase
             string to = MergeTargetId(family, tier);
             _blocks[to] = Count(to) + 1;
             return true;
-        }
-
-        /// <summary>演示数据：局内掉落尚未接入，数量为锚点（doc/CODEBASE.md）。</summary>
-        public static CodebaseState SeedDemo()
-        {
-            var state = new CodebaseState();
-            state.Add(FragmentCatalog.TierId("attack", 1), 4);
-            state.Add(FragmentCatalog.TierId("heal", 1), 2);
-            state.Add(FragmentCatalog.TierId("shield", 1), 2);
-            state.AddMaterial(MaterialKind.TimeSlice, 8);
-            state.AddMaterial(MaterialKind.Ram, 4);
-            state.AddMaterial(MaterialKind.Driver, 2);
-            return state;
         }
     }
 }

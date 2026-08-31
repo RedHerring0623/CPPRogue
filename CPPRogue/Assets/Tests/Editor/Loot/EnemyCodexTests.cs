@@ -39,8 +39,9 @@ namespace CPPRogue.Core.Tests.Loot
             Assert.AreEqual("bug", entries[0].Id, "首条约定为 bug，图鉴排序稳定");
             foreach (CodexEntry e in entries)
             {
-                Assert.GreaterOrEqual(e.HpLv, 1); Assert.LessOrEqual(e.HpLv, 5);
-                Assert.GreaterOrEqual(e.AtkLv, 1); Assert.LessOrEqual(e.AtkLv, 5);
+                // hp/atk 是直值（≥0 可超 5），spd 仍是等级 1-5
+                Assert.GreaterOrEqual(e.HpLv, 0);
+                Assert.GreaterOrEqual(e.AtkLv, 0);
                 Assert.GreaterOrEqual(e.SpdLv, 1); Assert.LessOrEqual(e.SpdLv, 5);
                 Assert.GreaterOrEqual(e.SpawnScore, 0);
                 Assert.IsFalse(string.IsNullOrEmpty(e.NameZh), $"{e.Id} 缺中文名");

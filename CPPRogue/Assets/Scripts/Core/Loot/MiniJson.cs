@@ -12,6 +12,7 @@ namespace CPPRogue.Core.Loot
     /// 对象 → <see cref="Dictionary{String,Object}"/>，数组 → <see cref="List{Object}"/>，
     /// 数字 → double，字符串 → string，布尔 → bool，null → null。
     /// 不支持：注释、尾逗号、单引号字符串——数据表保持严格 JSON。
+    /// <see cref="Write(object)"/> 是它的逆运算（存档落盘用）。
     /// </summary>
     public static class MiniJson
     {
@@ -25,6 +26,97 @@ namespace CPPRogue.Core.Loot
             if (pos != text.Length)
                 throw Error(text, pos, "内容结束后还有剩余字符");
             return value;
+        }
+
+        /// <summary>把 Dictionary/List/string/double/bool/null 组装回 JSON 文本（与 Parse 成对的写入器）。</summary>
+        public static string Write(object value)
+        {
+            var sb = new StringBuilder();
+            WriteValue(value, sb);
+            return sb.ToString();
+        }
+
+        private static void WriteValue(object value, StringBuilder sb)
+        {
+            if (value == null)
+            {
+                sb.Append("null");
+                return;
+            }
+            if (value is string str)
+            {
+                WriteString(str, sb);
+                return;
+            }
+            if (value is bool b)
+            {
+                sb.Append(b ? "true" : "false");
+                return;
+            }
+            if (value is double d)
+            {
+                // 整数写成长整型（2 而不是 2.0），人读友好；Parse 侧统一还原 double
+                if (!double.IsInfinity(d) && !double.IsNaN(d)
+                    && d == Math.Floor(d) && Math.Abs(d) < 1e15)
+                    sb.Append(((long)d).ToString(CultureInfo.InvariantCulture));
+                else
+                    sb.Append(d.ToString("R", CultureInfo.InvariantCulture));
+                return;
+            }
+            if (value is List<object> list)
+            {
+                sb.Append('[');
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (i > 0)
+                        sb.Append(',');
+                    WriteValue(list[i], sb);
+                }
+                sb.Append(']');
+                return;
+            }
+            if (value is Dictionary<string, object> map)
+            {
+                sb.Append('{');
+                bool first = true;
+                foreach (KeyValuePair<string, object> pair in map)
+                {
+                    if (!first)
+                        sb.Append(',');
+                    first = false;
+                    WriteString(pair.Key, sb);
+                    sb.Append(':');
+                    WriteValue(pair.Value, sb);
+                }
+                sb.Append('}');
+                return;
+            }
+            throw new FormatException($"MiniJson.Write: 不支持的类型 {value.GetType()}");
+        }
+
+        private static void WriteString(string s, StringBuilder sb)
+        {
+            sb.Append('"');
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < ' ')
+                            sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                        else
+                            sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append('"');
         }
 
         private static object ParseValue(string s, ref int pos)

@@ -12,5 +12,11 @@ namespace CPPRogue.Core.Combat
         void Heal(float amount);
 
         void Shield(float amount, int durationTicks);
+
+        /// <summary>每个 tick 开始时由驱动层调用（当前语义：清空"持续 1 tick"的护盾）。</summary>
+        void BeginTick();
+
+        /// <summary>执行超窗的惩罚伤害（LootDesign.md §1）：按最大生命百分比扣血，穿盾穿无敌帧。</summary>
+        void TimeoutPunish(float maxHpFraction);
     }
 }

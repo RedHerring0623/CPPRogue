@@ -21,7 +21,7 @@ namespace CPPRogue.Core.Enemies
             if (_remaining <= 0f)
             {
                 sim.Explode(self, sim.Config.WatchdogBlastRadius,
-                    StatTable.Atk(sim.Config.WatchdogBlastAtkLv));
+                    sim.Config.WatchdogBlastAtk);
                 return;
             }
             self.StateLabel = $"watch {_remaining:0.0}s";

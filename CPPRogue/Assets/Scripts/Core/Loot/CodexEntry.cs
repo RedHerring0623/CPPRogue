@@ -31,9 +31,13 @@ namespace CPPRogue.Core.Loot
         /// <summary>档位。</summary>
         public CodexTier Tier;
 
-        /// <summary>属性等级 1-5（展示用；实际数值换算在 StatTable）。</summary>
+        /// <summary>HP 直值（2026-08-31 改版：bug 的 hp2 就是 2 点生命，战斗直接使用此值）。</summary>
         public int HpLv;
+
+        /// <summary>攻击力直值（打玩家一下扣这么多）。</summary>
         public int AtkLv;
+
+        /// <summary>速度等级 1-5（仍走 StatTable 换算）。</summary>
         public int SpdLv;
 
         /// <summary>出怪积分（波次配平，EnemyDesign.md §0）。</summary>

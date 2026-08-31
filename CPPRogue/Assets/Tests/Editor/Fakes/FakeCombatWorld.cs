@@ -11,6 +11,8 @@ namespace CPPRogue.Core.Tests.Fakes
         public readonly List<(float Damage, float Radius)> Attacks = new List<(float, float)>();
         public readonly List<float> Heals = new List<float>();
         public readonly List<(float Amount, int Ticks)> Shields = new List<(float, int)>();
+        public int BeginTicks;
+        public readonly List<float> TimeoutPunishes = new List<float>();
 
         public void Attack(float damage, float radius)
         {
@@ -25,6 +27,16 @@ namespace CPPRogue.Core.Tests.Fakes
         public void Shield(float amount, int durationTicks)
         {
             Shields.Add((amount, durationTicks));
+        }
+
+        public void BeginTick()
+        {
+            BeginTicks++;
+        }
+
+        public void TimeoutPunish(float maxHpFraction)
+        {
+            TimeoutPunishes.Add(maxHpFraction);
         }
     }
 

@@ -168,15 +168,15 @@ namespace CPPRogue.Core.Tests.Enemies
             Assert.AreEqual(0f, unit.Speed);
             Assert.AreEqual(cfg.CompileDamageTakenMultiplier, unit.DamageTakenMultiplier);
 
-            sim.DamageEnemy(unit, 3f);
-            Assert.AreEqual(StatTable.Hp(1) - 3f * cfg.CompileDamageTakenMultiplier, unit.Hp, 0.001f,
-                "编译期受伤 ×2");
+            sim.DamageEnemy(unit, 0.3f);
+            Assert.AreEqual(1f - 0.3f * cfg.CompileDamageTakenMultiplier, unit.Hp, 0.001f,
+                "编译期受伤 ×2（编译态 hp1 直值，0.3 伤害打不死）");
 
             Run(sim, cfg.CompileTime + 0.6f);
 
-            Assert.AreEqual(StatTable.Hp(cfg.CompileRuntimeHpLv), unit.MaxHp, 0.001f, "读条完变运行态");
+            Assert.AreEqual(cfg.CompileRuntimeHp, unit.MaxHp, 0.001f, "读条完变运行态（直值）");
             Assert.AreEqual(unit.MaxHp, unit.Hp, 0.001f);
-            Assert.AreEqual(StatTable.Atk(cfg.CompileRuntimeAtkLv), unit.Atk);
+            Assert.AreEqual(cfg.CompileRuntimeAtk, unit.Atk);
             Assert.AreEqual(1f, unit.DamageTakenMultiplier);
             Assert.Less(Vec2.Distance(unit.Position, sim.PlayerPosition), 2f, "运行态开始追击");
         }

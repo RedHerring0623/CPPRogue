@@ -32,9 +32,9 @@ namespace CPPRogue.Core.Enemies
             var cfg = sim.Config;
             _compiled = true;
             self.StateLabel = "";
-            self.MaxHp = StatTable.Hp(cfg.CompileRuntimeHpLv);
+            self.MaxHp = cfg.CompileRuntimeHp;
             self.Hp = self.MaxHp;
-            self.Atk = StatTable.Atk(cfg.CompileRuntimeAtkLv);
+            self.Atk = cfg.CompileRuntimeAtk;
             self.Speed = StatTable.Speed(cfg.CompileRuntimeSpdLv);
             self.DamageTakenMultiplier = 1f;
             sim.Publish(SimEvent.FromEnemy(SimEventType.Compiled, self));

@@ -15,7 +15,8 @@
 | [COMPUTING.md](COMPUTING.md) | CPU 周期资源 | `Assets/Scripts/Core/Computing/` |
 | [PHYSICS.md](PHYSICS.md) | 碰撞判定 | `Assets/Scripts/Core/Physics/` |
 | [CODEX.md](CODEX.md) | 怪物图鉴与掉落数据：EnemyTable.json / 内置镜像 / MiniJson | `Assets/Scripts/Core/Loot/` + `Game/CodexPanel.cs` |
-| [CODEBASE.md](CODEBASE.md) | 局外代码库：语块阶梯 / 合成 / 材料余额 | `Assets/Scripts/Core/Codebase/` + `Game/BuildPanel.cs` |
+| [CODEBASE.md](CODEBASE.md) | 局外代码库：语块阶梯 / 合成 / 材料余额 / 档案与成长 | `Assets/Scripts/Core/Codebase/` + `Game/BuildPanel.cs` |
+| [EXTRACTION.md](EXTRACTION.md) | 局内循环：掉落 / 拾取 / 撤离 / 存档 | `Core/Loot/DropRoller.cs` + `Game/ExtractionPoint.cs` 等 |
 | [DEMO_UI.md](DEMO_UI.md) | 执行可视化 Demo（开发期演示，非 Unity） | `DemoUI/` |
 | [PRESENTATION.md](PRESENTATION.md) | Unity 表现层（2D 俯视角视图/TickDriver） | `Assets/Scripts/Game/` |
 
@@ -157,8 +158,10 @@ ICombatWorld ←── FakeCombatWorld（单测）/ Unity 实现（表现层）
 **怪物图鉴数据层**（Core/Loot：材料三件套 + EnemyTable.json 加载 + 同步测试）、
 **ESC 主菜单 + 怪物图鉴 UI**、**死亡弹窗 + 重新开始**（重开保留拼装结果）、
 **游戏主菜单**（启动进程→选图→开局 / 构建 / 图鉴 / 退出；词法树占位禁用）、
-**局外代码库**（Core/Codebase：语块阶梯 + 合成 + 材料余额，构建页 UI）。
-测试：110 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics，待编辑器 Test Runner 首跑）。
+**局外代码库**（Core/Codebase：语块阶梯 + 合成 + 材料余额 + 战备 BD + 等比成长兑换，构建页 UI）、
+**搜打撤闭环**（怪死掉落材料→拾取背包→撤离点读条入库；死亡全清）、**存档**（save.json：仓库/成长/BD，Routine JSON 序列化）、
+**执行时间窗与三段惩罚**（超窗减速掉血→强杀眩晕）、**护盾/治疗落地**（sim 结算 + 护盾环/HP 显示）。
+测试：130 个全绿（dotnet）+ 6 个仅 Unity 侧（Physics，待编辑器 Test Runner 首跑）。
 
 **未实现**（按建议顺序）：
 

@@ -7,6 +7,9 @@ namespace CPPRogue.Game
     {
         public string Title;
         public Func<Block> Make;
+
+        /// <summary>剩余可用数量（仓库持有 − BD 已用），实时计算；null = 不限量（测试 BD）。</summary>
+        public Func<int?> Remaining;
     }
 
     /// <summary>可拖入的语法块清单（与 DemoUI 面板一致）。</summary>

@@ -66,9 +66,10 @@ namespace CPPRogue.Core.Loot
                 Summons = ParseSummons(map),
             };
 
-            if (entry.HpLv < 1 || entry.HpLv > 5 || entry.AtkLv < 1 || entry.AtkLv > 5
-                || entry.SpdLv < 1 || entry.SpdLv > 5)
-                throw new FormatException($"EnemyTable.json[{id}]: 属性等级必须是 1-5");
+            if (entry.SpdLv < 1 || entry.SpdLv > 5)
+                throw new FormatException($"EnemyTable.json[{id}]: spd 必须是等级 1-5");
+            if (entry.HpLv < 0 || entry.AtkLv < 0)
+                throw new FormatException($"EnemyTable.json[{id}]: hp/atk 直值不能为负");
             return entry;
         }
 

@@ -28,5 +28,32 @@ namespace CPPRogue.Game
             tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
         }
+
+        /// <summary>生成默认朝上的实心三角 Sprite（撤离指引箭头）。</summary>
+        public static Sprite CreateTriangle(int size, Color color)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            float c = size * 0.5f - 0.5f;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                // 底边最宽，往上收拢到顶点
+                float t = Mathf.InverseLerp(1f, size - 2f, y);
+                float half = Mathf.Lerp((size - 3f) * 0.5f, 1f, t);
+                for (int x = 0; x < size; x++)
+                {
+                    float a = Mathf.Clamp01(half - Mathf.Abs(x - c) + 0.5f)
+                            * Mathf.Clamp01(y - 0.5f)
+                            * Mathf.Clamp01(size - 1.5f - y);
+                    pixels[y * size + x] = new Color(color.r, color.g, color.b, a);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        }
     }
 }

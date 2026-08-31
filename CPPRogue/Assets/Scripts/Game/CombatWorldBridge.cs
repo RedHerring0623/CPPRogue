@@ -47,8 +47,20 @@ namespace CPPRogue.Game
 
         public void Shield(float amount, int durationTicks)
         {
+            if (Director != null)
+                Director.ShieldPlayer(amount);
             if (Hud != null)
-                Hud.Log($"shield({amount:0.#}) → 护盾，持续 {durationTicks} tick");
+                Hud.Log($"shield({amount:0.#}) → 护盾 +{amount:0.#}（持续到下个 tick）");
+        }
+
+        public void BeginTick()
+        {
+            Director?.BeginTick();   // 清空"持续 1 tick"的护盾
+        }
+
+        public void TimeoutPunish(float maxHpFraction)
+        {
+            Director?.TimeoutPunish(maxHpFraction);
         }
     }
 }

@@ -44,7 +44,7 @@ namespace CPPRogue.Game
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
-            go.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.88f);
+            go.AddComponent<Image>().color = new Color(0.03f, 0.04f, 0.06f, 1f);   // 完全不透明：底下的菜单/游戏不许透出来
 
             var panel = go.AddComponent<CodexPanel>();
             panel.Build(onBack, backLabel);

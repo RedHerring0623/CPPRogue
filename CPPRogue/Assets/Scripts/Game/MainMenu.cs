@@ -7,18 +7,17 @@ namespace CPPRogue.Game
 {
     /// <summary>
     /// 主菜单（启动后第一屏）：启动进程 / 构建 / 词法树（禁用）/ 怪物图鉴 / 退出进程。
-    /// 局外仓库（CodebaseState）挂在这里跨局保留——死亡、重开都不清局外数据。
+    /// 持有玩家局外档案（PlayerProfile：仓库 + 成长 + 战备 BD）——跨局保留、死亡不清；
+    /// 由 GameBootstrap 在启动时从存档载入，改动即时落盘（SaveFile）。
     /// </summary>
     public sealed class MainMenu : MonoBehaviour
     {
-        private static CodebaseState _codebase;
-
-        public static CodebaseState Codebase => _codebase;
+        public static PlayerProfile Profile { get; set; }
 
         public static void Show()
         {
-            if (_codebase == null)
-                _codebase = CodebaseState.SeedDemo();   // 演示数据：局内掉落未接入，见 doc/CODEBASE.md
+            if (Profile == null)
+                Profile = PlayerProfile.NewGame();
 
             var go = new GameObject("MainMenuRoot");
             GameBootstrap.Track(go);
@@ -73,7 +72,7 @@ namespace CPPRogue.Game
 
             var footRect = UiFactory.Rect("Footer", transform,
                 new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(224f, 14f), new Vector2(900, 20));
-            UiFactory.Label(footRect, "v0.1 演示版 · 仓库与材料为演示数据，未持久化",
+            UiFactory.Label(footRect, "v0.2 演示版 · 存档自动保存（persistentDataPath/save.json）",
                 UiFonts.Code, 12, new Color(0.35f, 0.38f, 0.44f));
         }
 
@@ -108,7 +107,7 @@ namespace CPPRogue.Game
 
         private void OpenBuild()
         {
-            BuildPanel.Create(transform, _codebase);
+            BuildPanel.Create(transform, Profile);
         }
 
         private void OpenCodex()

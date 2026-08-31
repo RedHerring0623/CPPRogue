@@ -35,6 +35,9 @@ namespace CPPRogue.Game
             EnsureEventSystem();
             StyleCamera();
 
+            // 存档：有档读档，没档新开（一个 attack(1)、2 行、1s 窗，见 PlayerProfile.NewGame）
+            MainMenu.Profile = SaveFile.Load() ?? CPPRogue.Core.Codebase.PlayerProfile.NewGame();
+
             MainMenu.Show();
         }
 
@@ -153,8 +156,15 @@ namespace CPPRogue.Game
             // RoutineHud：左上角源码逐行显示 + 高亮
             RoutineHud hud = canvasGo.AddComponent<RoutineHud>();
 
-            // 拼装编辑器是唯一事实来源：首局放演示程序，重开沿用玩家拼过的版本
-            RoutineEditor editor = _carriedEditor ?? NewDemoEditor();
+            // 拼装编辑器是唯一事实来源：正常 BD 开局用档案里的战备 BD（死亡重开沿用局内拼过的版本）
+            RoutineEditor editor = _carriedEditor;
+            if (editor == null)
+            {
+                var profile = MainMenu.Profile;
+                editor = new RoutineEditor(profile.Progress.MaxLines);
+                for (int i = 0; i < profile.Loadout.Count; i++)
+                    editor.Insert(new Slot(null, 0, i), BlockCloner.Clone(profile.Loadout[i]));
+            }
             Routine routine = editor.BuildRoutine();
             hud.Rebuild(routine);
 
@@ -172,34 +182,26 @@ namespace CPPRogue.Game
             world.Director = director;
             canvasGo.AddComponent<EnemyTestPanel>().Setup(director);
 
-            // TickDriver + ESC 暂停菜单（编辑 Routine / 怪物图鉴从这里进）
+            // TickDriver（执行时间窗来自局外成长）+ ESC 暂停菜单（编辑 Routine / 怪物图鉴从这里进）
             TickDriver driver = playerGo.AddComponent<TickDriver>();
             driver.TickInterval = 3f;
             driver.StatementInterval = 0.2f;
+            driver.ExecutionWindowSeconds = MainMenu.Profile.Progress.WindowSeconds;
             driver.Setup(routine, world, hud, player);
 
+            // 撤离点：测试地图常态存在（正式地图的出现条件后续再加）
+            var extractionGo = new GameObject("ExtractionPoint");
+            Tracked.Add(extractionGo);
+            extractionGo.AddComponent<ExtractionPoint>().Setup(player, director);
+
+            // 测试 BD：测试地图专属，全语句自由拼（不存档）。初始内容 = 正常 BD 的克隆，方便对照着改。
+            // 正式地图传 null，ESC 菜单里就只有"编辑 BD · 正常"。
+            var testEditor = new RoutineEditor(Routine.DefaultMaxLines);
+            for (int i = 0; i < editor.Root.Length; i++)
+                testEditor.Insert(new Slot(null, 0, i), BlockCloner.Clone(editor.Root[i]));
+
             PauseController pause = canvasGo.AddComponent<PauseController>();
-            pause.Setup(editor, driver, hud);
-        }
-
-        /// <summary>首局的演示程序：for (i = 0; i &lt; 3; i += 1) attack(); attack();</summary>
-        private static RoutineEditor NewDemoEditor()
-        {
-            var editor = new RoutineEditor();
-            foreach (Block b in DemoProgram())
-                editor.Insert(new Slot(null, 0, editor.Root.Length), b);
-            return editor;
-        }
-
-        private static Block[] DemoProgram()
-        {
-            return new[]
-            {
-                Block.For("i", Expr.Num(0),
-                    Expr.Bin(BinaryOp.Lt, Expr.Var("i"), Expr.Num(3)), Expr.Num(1),
-                    Block.Call("attack")),
-                Block.Call("attack"),
-            };
+            pause.Setup(editor, testEditor, driver, hud);
         }
     }
 }

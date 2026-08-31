@@ -31,12 +31,13 @@ namespace CPPRogue.Core.Tests.Enemies
             Enemy bug = sim.Spawn(EnemyKind.Bug, new Vec2(5f, 0f));
             Enemy fast = sim.Spawn(EnemyKind.NullPointer, new Vec2(5f, 0f));
 
-            Assert.AreEqual(StatTable.Hp(2), bug.MaxHp);
-            Assert.AreEqual(StatTable.Atk(1), bug.Atk);
+            // 2026-08-31 数值改版：hp/atk 是图鉴直值（bug hp2 就是 2 点生命），spd 仍是等级换算
+            Assert.AreEqual(2f, bug.MaxHp);
+            Assert.AreEqual(1f, bug.Atk);
             Assert.AreEqual(StatTable.Speed(2), bug.Speed);
 
             // 空指针：快而脆（hp1 spd3）
-            Assert.AreEqual(StatTable.Hp(1), fast.MaxHp);
+            Assert.AreEqual(1f, fast.MaxHp);
             Assert.AreEqual(StatTable.Speed(3), fast.Speed);
         }
 
@@ -47,13 +48,13 @@ namespace CPPRogue.Core.Tests.Enemies
             sim.Spawn(EnemyKind.Bug, new Vec2(0.5f, 0f)); // 圆心距 0.5 < 半径和 0.85，持续重叠
 
             sim.Step(0.01f);
-            Assert.AreEqual(100f - StatTable.Atk(1), sim.PlayerHp, 0.001f, "接触瞬间结算一次");
+            Assert.AreEqual(10f - 1f, sim.PlayerHp, 0.001f, "接触瞬间结算一次（玩家 10 血，bug atk1 直值）");
 
             Run(sim, 0.05f, 0.05f); // 0.1s 无敌帧内
-            Assert.AreEqual(100f - StatTable.Atk(1), sim.PlayerHp, 0.001f, "无敌帧内不重复结算");
+            Assert.AreEqual(10f - 1f, sim.PlayerHp, 0.001f, "无敌帧内不重复结算");
 
             Run(sim, 0.1f, 0.05f); // 越过 0.1s：唯一受击间隔到期，持续重叠就继续掉血
-            Assert.AreEqual(100f - StatTable.Atk(1) * 2f, sim.PlayerHp, 0.001f, "间隔到期再次结算");
+            Assert.AreEqual(10f - 1f * 2f, sim.PlayerHp, 0.001f, "间隔到期再次结算");
         }
 
         [Test]
@@ -64,7 +65,7 @@ namespace CPPRogue.Core.Tests.Enemies
             sim.Spawn(EnemyKind.Bug, new Vec2(-0.5f, 0f));
 
             sim.Step(0.01f);
-            Assert.AreEqual(100f - StatTable.Atk(1), sim.PlayerHp, 0.001f,
+            Assert.AreEqual(10f - 1f, sim.PlayerHp, 0.001f,
                 "两只同时贴脸：0.3s 全局无敌帧保证只掉一次血");
         }
 
@@ -80,14 +81,15 @@ namespace CPPRogue.Core.Tests.Enemies
 
             Assert.IsTrue(original.Dead, "本体死亡");
             Assert.AreEqual(2, AliveCount(sim), "分裂为两份 hp2 副本");
-            Assert.IsTrue(System.Linq.Enumerable.All(sim.Enemies, e => e.Dead || (e.Generation == 1 && e.MaxHp == StatTable.Hp(2))));
+            Assert.IsTrue(System.Linq.Enumerable.All(sim.Enemies, e => e.Dead || (e.Generation == 1 && e.MaxHp == 2f)),
+                "分裂为两份 hp2 副本（直值）");
 
             // 打死一份 hp2 → 两份 hp1（直杀不清尸，断言只数活体）
             Enemy copy = FirstAlive(sim);
             sim.DamageEnemy(copy, 999f);
             int gen2 = 0;
             foreach (Enemy e in sim.Enemies)
-                if (!e.Dead && e.Generation == 2 && e.MaxHp == StatTable.Hp(1))
+                if (!e.Dead && e.Generation == 2 && e.MaxHp == 1f)
                     gen2++;
             Assert.AreEqual(2, gen2, "分裂出的两份是 hp1 世代");
             Assert.AreEqual(3, AliveCount(sim), "另一份 hp2 副本还活着");
@@ -138,7 +140,7 @@ namespace CPPRogue.Core.Tests.Enemies
                 if (ev.Type == SimEventType.Exploded)
                     exploded = true;
             Assert.IsTrue(exploded, "自爆产生 Exploded 事件");
-            Assert.AreEqual(100f - StatTable.Atk(3), sim.PlayerHp, 0.001f, "只吃自爆（atk3），无接触干扰");
+            Assert.AreEqual(10f - 3f, sim.PlayerHp, 0.001f, "只吃自爆（atk3），无接触干扰");
         }
 
         [Test]
@@ -154,7 +156,7 @@ namespace CPPRogue.Core.Tests.Enemies
 
             foreach (SimEvent ev in sim.DrainEvents())
                 Assert.AreNotEqual(SimEventType.Exploded, ev.Type, "提前击杀则解除自爆");
-            Assert.AreEqual(100f, sim.PlayerHp, 0.001f, "死怪不移动不碰撞");
+            Assert.AreEqual(10f, sim.PlayerHp, 0.001f, "死怪不移动不碰撞");
         }
 
         [Test]
@@ -212,7 +214,7 @@ namespace CPPRogue.Core.Tests.Enemies
             sim.SpawnEnemyBullet(shooter, sim.PlayerPosition, speed: 3f, atk: 5f);
             Run(sim, 2f);
 
-            Assert.AreEqual(100f - 5f, sim.PlayerHp, 0.001f,
+            Assert.AreEqual(10f - 5f, sim.PlayerHp, 0.001f,
                 "两发同帧命中：无敌帧只放进去一发，另一发穿过");
         }
 

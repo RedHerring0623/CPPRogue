@@ -111,18 +111,18 @@ namespace CPPRogue.Core.Tests.Codebase
             Assert.IsFalse(state.Merge("for", 1));
         }
 
-        // —— 演示数据 ——
+        // —— 材料花费 ——
 
         [Test]
-        public void 演示数据_锚点()
+        public void 材料_Spend不足拒绝且不部分扣除()
         {
-            CodebaseState state = CodebaseState.SeedDemo();
-            Assert.AreEqual(4, state.Count("attack(1)"));
-            Assert.AreEqual(2, state.Count("heal(1)"));
-            Assert.AreEqual(2, state.Count("shield(1)"));
-            Assert.AreEqual(8, state.CountMaterial(MaterialKind.TimeSlice));
-            Assert.AreEqual(4, state.CountMaterial(MaterialKind.Ram));
-            Assert.AreEqual(2, state.CountMaterial(MaterialKind.Driver));
+            var state = new CodebaseState();
+            state.AddMaterial(MaterialKind.Ram, 3);
+            Assert.IsFalse(state.Spend(MaterialKind.Ram, 4));
+            Assert.AreEqual(3, state.CountMaterial(MaterialKind.Ram), "失败不扣");
+            Assert.IsTrue(state.Spend(MaterialKind.Ram, 3));
+            Assert.AreEqual(0, state.CountMaterial(MaterialKind.Ram));
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => state.Spend(MaterialKind.Ram, -1));
         }
     }
 }
